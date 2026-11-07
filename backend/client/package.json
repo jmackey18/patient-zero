@@ -1,0 +1,13 @@
+{
+  "name": "patient-zero-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "spacetime generate --lang typescript --module-path ../spacetime/spacetimedb --out-dir module_bindings --import-extension ts",
+    "test-client": "node test_client.js"
+  },
+  "dependencies": {
+    "spacetimedb": "2.14.*"
+  }
+}
