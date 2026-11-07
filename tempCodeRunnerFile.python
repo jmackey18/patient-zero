@@ -1,0 +1,30 @@
+import random
+
+def generate_people(count: int) -> list[dict]:
+    personas = ["Student", "Professional", "Grandparent"]
+    '''
+    the weakness values correspond to the personas with each index
+    to check if the persona gets infected, we get a random number 1-100
+    if the number is higher than the weakness value, the persona gets infected
+    '''
+    weakness = [70, 85, 30] # Weakness values for Student, Professional, Grandparent respectively
+    # Pre-sample the choices in bulk for massive speedup when count is large
+    chosen_personas = random.choices(personas, k=count)
+    chosen_ages = [random.randint(18, 80) for _ in range(count)]
+    
+    return [
+        {
+            "name": f"Person {i}",
+            "persona": f"Persona: {chosen_personas[i - 1]}",
+            "weakness": f"Weakness value: {weakness[personas.index(chosen_personas[i - 1])]}",
+            "age": chosen_ages[i - 1],
+            "city": f"City {i}"
+        }
+        for i in range(1, count + 1)
+    ]
+
+
+people_data = generate_people(5000)
+print(f"Generated {len(people_data)} entries successfully.")
+print(people_data[:5])  # Print the first 5 entries for verification
+print("\n" + people_data[0]["persona"] + ", " + people_data[0]["weakness"])  # Print the last 5 entries for verification
