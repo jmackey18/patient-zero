@@ -38,3 +38,19 @@ npm install
 npm run generate                                  # regenerate bindings after any module change
 node test_client.js YourName                      # prints PASS when the live insert arrives
 ```
+
+## Seed Avon residents (backend/ + simulation/)
+Gemini generated the personas once (`simulation/data/personas.json`, committed). Seeding is plain Python, no LLM.
+
+```
+cd backend/spacetime
+spacetime publish -s local patient-zero-db --delete-data=on-conflict -y   # adds resident + resident_profile tables
+cd ../client && npm run generate                                         # refresh client bindings
+cd ../..
+pip install -r requirements.txt
+python simulation/generate_personas.py      # ONLY to regenerate personas.json (needs GEMINI_API_KEY in .env)
+python simulation/residents.py --count 5000 # -> simulation/data/residents.json (seed 42, deterministic)
+python simulation/seed_spacetime.py         # clear + load in batches of 500; prints row counts
+# Vultr: python simulation/seed_spacetime.py --host https://db.149-28-246-156.sslip.io
+spacetime sql -s local patient-zero-db "SELECT COUNT(*) AS n FROM resident"
+```

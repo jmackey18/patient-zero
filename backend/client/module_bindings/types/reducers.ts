@@ -7,8 +7,12 @@ import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
 import AddReducer from "../add_reducer.ts";
+import ClearResidentsReducer from "../clear_residents_reducer.ts";
 import SayHelloReducer from "../say_hello_reducer.ts";
+import SeedResidentsBatchReducer from "../seed_residents_batch_reducer.ts";
 
 export type AddParams = __Infer<typeof AddReducer>;
+export type ClearResidentsParams = __Infer<typeof ClearResidentsReducer>;
 export type SayHelloParams = __Infer<typeof SayHelloReducer>;
+export type SeedResidentsBatchParams = __Infer<typeof SeedResidentsBatchReducer>;
 
