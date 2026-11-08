@@ -6,7 +6,6 @@ import type {
   LiveFeed,
   LiveIncident,
   LiveNotification,
-  PipelineLogLine,
   Resident,
   SimRun,
   Snapshot,
@@ -26,7 +25,6 @@ const QUERIES = [
   "SELECT * FROM incident",
   "SELECT * FROM scenario",
   "SELECT * FROM sim_run",
-  "SELECT * FROM pipeline_log",
 ];
 
 /** Spacetime Timestamp -> epoch milliseconds. */
@@ -177,18 +175,9 @@ export function createSpacetimeAdapter({
           createdAt: toMs(r.createdAt),
         };
     }
-    const logs: PipelineLogLine[] = [...c.db.pipelineLog.iter()]
-      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      .map((l) => ({
-        id: String(l.id),
-        source: l.source === "attacker" ? "attacker" : "detector",
-        line: l.line,
-        at: toMs(l.at),
-      }));
     return {
       scenarios,
       latestRun,
-      logs,
       notifications,
       alertCount,
       recoveryCount,
@@ -258,8 +247,6 @@ export function createSpacetimeAdapter({
     c.db.scenario.onUpdate(scheduleRebuild);
     c.db.simRun.onInsert(scheduleRebuild);
     c.db.simRun.onUpdate(scheduleRebuild);
-    c.db.pipelineLog.onInsert(scheduleRebuild);
-    c.db.pipelineLog.onDelete(scheduleRebuild);
   }
 
   try {

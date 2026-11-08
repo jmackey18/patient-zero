@@ -74,7 +74,6 @@ test("recipient changes from green to red only when its received message cluster
     campaigns: [{ ...data.campaigns[0], detectionStatus: "flagged" }],
   });
   assert.equal(flagged.get("r1").status, "flagged");
-  assert.equal(flagged.get("r1").flaggedCount, 1);
   assert.equal(flagged.get("r2").status, "no_flagged");
   assert.equal(JSON.stringify(data), before);
 });
@@ -96,13 +95,8 @@ test("warning acknowledgment and completed investigation preserve exposure", () 
   assert.deepEqual(residentSignals(data).get("r1"), {
     status: "flagged",
     investigating: false,
-    messageCount: 1,
-    flaggedCount: 1,
-    warningCount: 1,
-    acknowledgedCount: 1,
   });
   assert.equal(residentSignals(data).get("r2").status, "no_flagged");
-  assert.equal(residentSignals(data).get("r2").warningCount, 1);
 });
 
 test("empty live feeds stay unknown and orphan records cannot create resident nodes", () => {
@@ -114,9 +108,7 @@ test("empty live feeds stay unknown and orphan records cannot create resident no
   });
   const nodes = residentMapStates(data);
   assert.equal(nodes.length, 2);
-  assert.ok(
-    nodes.every((node) => node.status === "unavailable" && !node.warningCount),
-  );
+  assert.ok(nodes.every((node) => node.status === "unavailable"));
   assert.equal(
     residentMapStates({
       residents: [],
@@ -144,11 +136,7 @@ test("reset preserves resident IDs and clears previous warning/flag records", ()
     flagged.map(({ id }) => id),
     reset.map(({ id }) => id),
   );
-  assert.ok(
-    reset.every(
-      (node) => node.status === "no_flagged" && node.warningCount === 0,
-    ),
-  );
+  assert.ok(reset.every((node) => node.status === "no_flagged"));
 });
 
 test("blue mock outlines follow campaign membership and stay separate from exposure and warnings", () => {
@@ -172,8 +160,6 @@ test("blue mock outlines follow campaign membership and stay separate from expos
   assert.equal(signals.get("r1").investigating, true);
   assert.equal(signals.get("r2").investigating, false);
   assert.equal(signals.get("r1").status, "flagged");
-  assert.equal(signals.get("r1").warningCount, 1);
-  assert.equal(signals.get("r1").acknowledgedCount, 1);
   for (const investigationStatus of ["complete", "failed", "not_requested"]) {
     const changed = residentSignals({
       ...data,
@@ -181,7 +167,6 @@ test("blue mock outlines follow campaign membership and stay separate from expos
     });
     assert.equal(changed.get("r1").investigating, false);
     assert.equal(changed.get("r1").status, "flagged");
-    assert.equal(changed.get("r1").warningCount, 1);
   }
   assert.equal(
     residentSignals({ ...data, connection: { state: "live" } }).get("r1")
@@ -199,7 +184,7 @@ test("blue mock outlines follow campaign membership and stay separate from expos
   );
 });
 
-test("live flags drive colors independently from notifications and AI assessments", () => {
+test("live recovery recipients drive red independently from exposure flags and AI assessments", () => {
   const data = snapshot({
     connection: { state: "live" },
     residents: [
@@ -233,17 +218,9 @@ test("live flags drive colors independently from notifications and AI assessment
   const nodes = residentMapStates(data);
   assert.deepEqual(
     nodes.map((n) => n.status),
-    ["exposed", "warned", "untouched", "unavailable"],
+    ["recovery", "warned", "untouched", "unavailable"],
   );
-  assert.deepEqual(
-    nodes.map((n) => n.warningCount),
-    [1, 1, 0, 0],
-  );
-  assert.ok(
-    nodes.every(
-      (n) => !n.investigating && n.messageCount === 0 && n.flaggedCount === 0,
-    ),
-  );
+  assert.ok(nodes.every((n) => !n.investigating));
   for (const status of ["complete", "failed"]) {
     assert.deepEqual(
       residentMapStates({
@@ -264,9 +241,7 @@ test("live flags drive colors independently from notifications and AI assessment
     })),
     liveFeed: { notifications: [], incidents: [] },
   });
-  assert.ok(
-    cleared.every((n) => n.status === "untouched" && n.warningCount === 0),
-  );
+  assert.ok(cleared.every((n) => n.status === "untouched"));
   assert.deepEqual(
     nodes.map(({ id }) => id),
     cleared.map(({ id }) => id),
@@ -274,20 +249,69 @@ test("live flags drive colors independently from notifications and AI assessment
   assert.equal(JSON.stringify(data), before);
 });
 
-test("5000 live residents retain distinct exposed and warned counts on updates", () => {
+test("six then seven recovery recipients yield exactly six then seven red trails among 5000 residents", async () => {
+  const { sampleResidentTrails, isRed } = await loadTypeScript(
+    new URL("../src/components/campus/trailSample.ts", import.meta.url),
+  );
   const data = snapshot({
     connection: { state: "live" },
     residents: Array.from({ length: 5000 }, (_, id) => ({
       ...resident,
       id: String(id),
-      liveState: { exposed: id < 6, warned: id >= 6 },
+      liveState: { exposed: id < 80, warned: id >= 80 },
     })),
     messages: [],
     campaigns: [],
     warnings: [],
   });
-  const nodes = residentMapStates(data);
-  assert.equal(nodes.filter((n) => n.status === "exposed").length, 6);
-  assert.equal(nodes.filter((n) => n.status === "warned").length, 4994);
-  assert.ok(nodes.every((n) => n.warningCount === 0));
+  const before = JSON.stringify(data);
+  for (const count of [0, 6, 7]) {
+    const notifications = Array.from({ length: count }, (_, id) => ({
+      id: String(id),
+      recipientId: String(id),
+      kind: "recovery",
+    }));
+    const nodes = residentMapStates({ ...data, liveFeed: { notifications } });
+    const red = sampleResidentTrails(nodes).filter(isRed);
+    assert.equal(red.length, count);
+    assert.deepEqual(
+      red.map((node) => node.id).sort(),
+      notifications.map((n) => n.recipientId).sort(),
+    );
+    assert.ok(
+      nodes
+        .filter((node) => Number(node.id) >= count && Number(node.id) < 80)
+        .every((node) => node.status === "untouched"),
+    );
+  }
+  assert.equal(JSON.stringify(data), before);
+});
+
+test("duplicate and orphan recovery records do not invent residents; removal clears red", async () => {
+  const { sampleResidentTrails, isRed } = await loadTypeScript(
+    new URL("../src/components/campus/trailSample.ts", import.meta.url),
+  );
+  const data = snapshot({
+    connection: { state: "live" },
+    liveFeed: {
+      notifications: [
+        { id: "1", recipientId: "r1", kind: "recovery" },
+        { id: "2", recipientId: "r1", kind: "recovery" },
+        { id: "3", recipientId: "missing", kind: "recovery" },
+        { id: "4", recipientId: "r2", kind: "alert" },
+      ],
+    },
+  });
+  const red = sampleResidentTrails(residentMapStates(data)).filter(isRed);
+  assert.deepEqual(
+    red.map((node) => node.id),
+    ["r1"],
+  );
+  assert.equal(red[0].status, "recovery");
+  assert.equal(
+    sampleResidentTrails(
+      residentMapStates({ ...data, liveFeed: { notifications: [] } }),
+    ).filter(isRed).length,
+    0,
+  );
 });

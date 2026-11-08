@@ -2,7 +2,6 @@ import type { LiveFeed, Snapshot } from "./contracts";
 
 const EMPTY: LiveFeed = {
   scenarios: [],
-  logs: [],
   notifications: [],
   alertCount: 0,
   recoveryCount: 0,

@@ -17,9 +17,22 @@ export interface ResidentTrip {
   timestamps: number[];
 }
 
-export const TRIP_LOOP_SECONDS = 600;
+/** Reuses GPU path buffers when a fresh filtered array contains the same immutable trips.
+ * Compare object identity, not just IDs: rebuilt paths/timestamps must invalidate buffers.
+ */
+export function sameTripData(next: unknown, previous?: unknown): boolean {
+  return (
+    next === previous ||
+    (Array.isArray(next) &&
+      Array.isArray(previous) &&
+      next.length === previous.length &&
+      next.every((trip, index) => trip === previous[index]))
+  );
+}
+
 export const TRAIL_SECONDS = 3;
-export const ARC_DURATION_SECONDS = 18;
+export const ARC_DURATION_SECONDS = 15 / 1.1;
+export const TRIP_LOOP_SECONDS = ARC_DURATION_SECONDS * 2;
 const ARC_SEGMENTS = 24;
 export const CAMPUS_VIEW = {
   longitude: -96.7503,
@@ -54,8 +67,8 @@ function randomFor(id: string) {
 }
 
 /** Creates phased, elevated links between building anchors, independent of actual contacts or travel.
- * Each resident makes two 18-second crossings per loop, resting at the endpoints between them.
- * Repeated cycles keep tails continuous at the clock seam without showing all 5,000 arcs at once.
+ * Sampled residents cross continuously at the same speed, without population-dependent timing.
+ * Repeated cycles keep tails continuous at the clock seam and at rooftop turns.
  */
 export function createResidentTrips(
   ids: string[],
@@ -102,16 +115,13 @@ export function createResidentTrips(
             start + leg * interval + fraction * ARC_DURATION_SECONDS,
           );
         }
-        // A stationary segment holds the head at the building; its fading tail disappears naturally.
-        path.push(pointAt(leg === 0 ? 1 : 0));
-        timestamps.push(start + (leg + 1) * interval);
       }
     }
     return { id, sourceId: source.id, targetId: target.id, path, timestamps };
   });
 }
 
-/** Finds the current arc head (or resting endpoint) for focus and selected-resident highlighting. */
+/** Finds the current arc head for selected-resident highlighting. */
 export function tripPosition(trip: ResidentTrip, time: number): ArcPosition {
   for (let i = 1; i < trip.timestamps.length; i++) {
     if (trip.timestamps[i] < time) continue;

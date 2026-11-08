@@ -121,20 +121,11 @@ export interface SimRun {
   createdAt: number;
 }
 
-/** Spacetime `pipeline_log` row: one terminal line from the attacker or detector. */
-export interface PipelineLogLine {
-  id: string;
-  source: "attacker" | "detector";
-  line: string;
-  at: number;
-}
-
 /** Live notification + Nemotron feed. Present only in live mode (`VITE_DATA_MODE=live`). */
 export interface LiveFeed {
-  /** Simulate-button scenarios, runs (newest first) and terminal output (oldest first). */
+  /** Simulate-button scenarios and the latest run. */
   scenarios: SimScenario[];
   latestRun?: SimRun;
-  logs: PipelineLogLine[];
   /** All notification rows, oldest first. */
   notifications: LiveNotification[];
   alertCount: number;

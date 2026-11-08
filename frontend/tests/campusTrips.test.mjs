@@ -3,8 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { loadTypeScript } from "./loadTypeScript.mjs";
 
-const { createResidentTrips, tripPosition, TRIP_LOOP_SECONDS, TRAIL_SECONDS } =
-  await loadTypeScript(new URL("../src/lib/campusTrips.ts", import.meta.url));
+const {
+  createResidentTrips,
+  sameTripData,
+  tripPosition,
+  TRIP_LOOP_SECONDS,
+  TRAIL_SECONDS,
+} = await loadTypeScript(new URL("../src/lib/campusTrips.ts", import.meta.url));
 const campus = JSON.parse(
   await readFile(
     new URL("../src/assets/utd-campus.json", import.meta.url),
@@ -22,18 +27,28 @@ const buildings = JSON.parse(
 );
 const anchors = createRoofAnchors(campus.anchors, buildings);
 
-test("5000 resident arcs connect distinct campus buildings with bounded altitude and seamless timing", () => {
+const { sampleResidentTrails, MAX_DISPLAY_TRAILS } = await loadTypeScript(
+  new URL("../src/components/campus/trailSample.ts", import.meta.url),
+);
+
+test("5000 residents produce at most 120 continuous rooftop trails with seamless timing", () => {
+  const nodes = Array.from({ length: 5000 }, (_, i) => ({
+    id: String(i),
+    status: i < 4 ? "recovery" : "warned",
+    investigating: false,
+  }));
+  const sampled = sampleResidentTrails(nodes);
   const trips = createResidentTrips(
-    Array.from({ length: 5000 }, (_, i) => String(i)),
+    sampled.map((node) => node.id),
     anchors,
   );
-  assert.equal(trips.length, 5000);
+  assert.equal(trips.length, MAX_DISPLAY_TRAILS);
   assert.deepEqual(
     trips[0],
-    createResidentTrips(["0"], anchors)[0],
+    createResidentTrips([trips[0].id], anchors)[0],
     "the same resident keeps identical geometry and timing at any population size",
   );
-  assert.equal(new Set(trips.map((trip) => trip.id)).size, 5000);
+  assert.equal(new Set(trips.map((trip) => trip.id)).size, MAX_DISPLAY_TRAILS);
   const byId = new Map(anchors.map((anchor) => [anchor.id, anchor.position]));
   for (const trip of trips) {
     assert.notEqual(trip.sourceId, trip.targetId);
@@ -84,7 +99,12 @@ test("5000 resident arcs connect distinct campus buildings with bounded altitude
       assert.ok(Math.abs(value - end[axis]) < 1e-8),
     );
   }
-  for (const time of [0, 150, 300, 599]) {
+  for (const time of [
+    0,
+    TRIP_LOOP_SECONDS / 4,
+    TRIP_LOOP_SECONDS / 2,
+    TRIP_LOOP_SECONDS - 0.01,
+  ]) {
     const active = trips.filter((trip) => {
       const point = tripPosition(trip, time);
       return [byId.get(trip.sourceId), byId.get(trip.targetId)].every(
@@ -93,8 +113,8 @@ test("5000 resident arcs connect distinct campus buildings with bounded altitude
       );
     }).length;
     assert.ok(
-      active > 150 && active < 450,
-      "staggered arcs avoid rendering the entire population simultaneously",
+      active >= MAX_DISPLAY_TRAILS - 1 && active <= MAX_DISPLAY_TRAILS,
+      "the representative sample stays moving without idle gaps",
     );
   }
 });
@@ -248,4 +268,21 @@ test("rooftop placement handles concave buildings, courtyards, and missing footp
       !(cx > 2 && cx < 4 && cy > 2 && cy < 4),
   );
   assert.equal(cz, 35 + ROOF_CLEARANCE_METERS);
+});
+
+test("color-only snapshots reuse path buffers, while changed geometry or membership invalidates them", () => {
+  const trips = createResidentTrips(["a", "b", "c"], anchors);
+  assert.equal(sameTripData([...trips], trips), true);
+  assert.equal(sameTripData(trips, undefined), false);
+  assert.equal(sameTripData(trips.slice(1), trips), false);
+  assert.equal(sameTripData([...trips].reverse(), trips), false);
+  const rebuilt = createResidentTrips(["a", "b", "c"], anchors);
+  rebuilt[0].path[0] = [0, 0, 50];
+  assert.equal(
+    sameTripData(rebuilt, trips),
+    false,
+    "same IDs cannot hide new geometry",
+  );
+  assert.equal(sameTripData([], trips), false);
+  assert.equal(sameTripData([], []), true);
 });

@@ -7,7 +7,7 @@ import { createServer } from "vite";
 import { BinaryReader, BinaryWriter } from "spacetimedb";
 
 let server;
-let LiveInvestigation, LiveNotifications, CommandCenter;
+let SimulatePanel, LiveNotifications, CommandCenter, ResidentPhoneOverlay;
 before(async () => {
   // Vite transforms the real TSX components without starting an HTTP/WebSocket server.
   server = await createServer({
@@ -17,8 +17,11 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
   });
-  ({ LiveInvestigation } = await server.ssrLoadModule(
-    "/src/components/LiveInvestigation.tsx",
+  ({ ResidentPhoneOverlay } = await server.ssrLoadModule(
+    "/src/components/campus/ResidentPhoneOverlay.tsx",
+  ));
+  ({ SimulatePanel } = await server.ssrLoadModule(
+    "/src/components/live/SimulatePanel.tsx",
   ));
   ({ LiveNotifications } = await server.ssrLoadModule(
     "/src/components/LiveNotifications.tsx",
@@ -47,6 +50,7 @@ const incident = {
   reasoning: "<script>untrusted</script>",
   warningText: "Review this warning",
   clusterMeta: [],
+  timeSpreadS: 12.5,
   createdAt: 1,
   updatedAt: 2,
 };
@@ -57,6 +61,7 @@ const snapshot = (patch = {}) => ({
   warnings: [],
   connection: { state: "live" },
   liveFeed: {
+    scenarios: [],
     incidents: [],
     notifications: [],
     alertCount: 0,
@@ -99,25 +104,27 @@ test("incident binding decodes consecutive deployed rows including time_spread_s
 
 test("investigation states distinguish unavailable, empty, pending, completed, and failed reports", () => {
   assert.match(
-    render(LiveInvestigation, { data: snapshot({ liveFeed: undefined }) }),
+    render(SimulatePanel, { data: snapshot({ liveFeed: undefined }) }),
     /unavailable until/,
   );
   assert.match(
-    render(LiveInvestigation, { data: snapshot() }),
-    /No investigations reported yet/,
+    render(SimulatePanel, { data: snapshot() }),
+    /No campaign detected yet/,
   );
   for (const status of ["investigating", "complete", "failed", "unexpected"]) {
     const report = { ...incident, status };
-    const html = render(LiveInvestigation, {
+    const html = render(SimulatePanel, {
       data: snapshot({
         liveFeed: {
+          scenarios: [],
           incidents: [report],
           latestIncident: report,
           notifications: [],
         },
       }),
     });
-    assert.match(html, /&lt;script&gt;untrusted&lt;\/script&gt;/);
+    if (status !== "investigating")
+      assert.match(html, /&lt;script&gt;untrusted&lt;\/script&gt;/);
     if (status === "complete") {
       assert.match(html, /91%/);
       assert.match(html, /Review this warning/);
@@ -125,11 +132,12 @@ test("investigation states distinguish unavailable, empty, pending, completed, a
       assert.doesNotMatch(html, /91%|Review this warning/);
     }
     if (status === "failed") assert.match(html, /Investigation unavailable/);
-    if (status === "unexpected") assert.match(html, /Unknown status/);
+    if (status === "unexpected")
+      assert.match(html, /Unknown investigation status/);
   }
 });
 
-test("notifications are bounded and safely rendered without removed phone controls", () => {
+test("notifications show only the newest record per type and escape their text", () => {
   const notifications = Array.from({ length: 5000 }, (_, i) => ({
     id: String(i),
     recipientId: String(i + 1),
@@ -145,7 +153,9 @@ test("notifications are bounded and safely rendered without removed phone contro
     },
   });
   const log = render(LiveNotifications, { data });
-  assert.equal((log.match(/<li /g) ?? []).length, 100);
+  assert.equal((log.match(/<li /g) ?? []).length, 2);
+  assert.match(log, /Alert 4998/);
+  assert.doesNotMatch(log, /Alert 4997/);
   assert.match(log, /Recovery guidance/);
   assert.match(log, /&lt;script&gt;Recovery guidance&lt;\/script&gt;/);
   assert.match(log, /Resident 5000/);
@@ -156,11 +166,7 @@ test("command center preserves live and mock records without removed pages", () 
   const data = snapshot();
   const html = render(CommandCenter, {
     data,
-    selectedId: "1",
-    onSelect() {},
   });
-  assert.match(html, /Exposed · backend state/);
-  assert.match(html, /Nemotron investigation/);
   assert.match(html, /Live notifications/);
   assert.doesNotMatch(
     html,
@@ -189,10 +195,7 @@ test("command center preserves live and mock records without removed pages", () 
   });
   const mockDashboard = render(CommandCenter, {
     data: mock,
-    selectedId: "1",
-    onSelect() {},
   });
-  assert.match(mockDashboard, /Messages in fixture/);
   assert.match(mockDashboard, /Warning log/);
   assert.match(mockDashboard, /Created · not acknowledged/);
   for (const dashboard of [html, mockDashboard]) {
@@ -200,6 +203,64 @@ test("command center preserves live and mock records without removed pages", () 
       dashboard,
       /Resident Phone|Attacker Console|Colors reflect backend simulation flags/,
     );
-    assert.match(dashboard, /Selected resident details/);
+    assert.doesNotMatch(
+      dashboard,
+      /Selected resident details|Trail legend|Nemotron investigation|Fixture counts|Live simulation counts|Building points and arcs are illustrative/,
+    );
   }
+});
+
+test("notification types update independently, including a type older than the last 100 rows", () => {
+  const notifications = [
+    { id: "1", recipientId: "1", kind: "recovery", text: "Older recovery" },
+    ...Array.from({ length: 150 }, (_, i) => ({
+      id: String(i + 2),
+      recipientId: "1",
+      kind: "alert",
+      text: `Alert sequence ${i}`,
+    })),
+  ];
+  const feed = snapshot().liveFeed;
+  const before = JSON.stringify(notifications);
+  const renderLog = (rows) =>
+    render(LiveNotifications, {
+      data: snapshot({ liveFeed: { ...feed, notifications: rows } }),
+    });
+  const first = renderLog(notifications);
+  assert.equal((first.match(/<li /g) ?? []).length, 2);
+  assert.match(first, /Older recovery/);
+  assert.match(first, /Alert sequence 149/);
+  const updated = renderLog([
+    ...notifications,
+    { id: "152", recipientId: "1", kind: "recovery", text: "New recovery" },
+  ]);
+  assert.match(updated, /New recovery/);
+  assert.doesNotMatch(updated, /Older recovery/);
+  assert.match(updated, /Alert sequence 149/);
+  assert.equal(JSON.stringify(notifications), before);
+  assert.equal(
+    (renderLog(notifications.slice(1)).match(/<li /g) ?? []).length,
+    1,
+  );
+  assert.match(renderLog([]), /No notifications reported yet/);
+});
+
+test("phone inspector uses the actual profile name and current status with safe text", () => {
+  const props = {
+    resident: {
+      ...resident,
+      displayName: "Alex <script>test</script>",
+      status: "recovery",
+      investigating: true,
+    },
+    onClose() {},
+    reducedMotion: false,
+  };
+  const html = render(ResidentPhoneOverlay, props);
+  assert.match(html, /Alex &lt;script&gt;test&lt;\/script&gt;/);
+  assert.match(html, /Status: Recovery guidance/);
+  assert.match(html, /Student/);
+  assert.match(html, /Campaign investigation in progress/);
+  assert.match(html, /Close resident details/);
+  assert.equal(render(ResidentPhoneOverlay, { ...props, resident: null }), "");
 });

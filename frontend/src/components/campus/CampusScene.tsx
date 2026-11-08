@@ -22,6 +22,7 @@ import type { FeatureCollection, Polygon } from "geojson";
 import { createRoofAnchors, type GroundAnchor } from "../../lib/campusAnchors";
 import {
   createResidentTrips,
+  sameTripData,
   CAMPUS_VIEW,
   TRAIL_SECONDS,
   TRIP_LOOP_SECONDS,
@@ -29,13 +30,18 @@ import {
   type CampusAnchor,
   type ResidentTrip,
 } from "../../lib/campusTrips";
-import { EXPOSURE_LABELS, type ResidentMapState } from "./mapModel";
+import { type ResidentMapState } from "./mapModel";
+import { sampleResidentTrails } from "./trailSample";
+import { useTrailColors } from "./useTrailColors";
+import { GREEN_FADE_MS } from "./trailColorQueue";
+import { ResidentPhoneOverlay } from "./ResidentPhoneOverlay";
 
 const ANCHORS = createRoofAnchors(
   campusData.anchors as GroundAnchor[],
   buildingData,
 );
 setWorkerUrl(mapWorkerUrl);
+const BOUNDARY_PATHS = [campusData.boundary];
 const MAP_VIEW = new MapView({ repeat: false });
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/dark";
 const BUILDING_SOURCE = "campus-building-footprints";
@@ -69,22 +75,20 @@ function campusOverview(width: number, height: number): MapViewState {
     ...CAMPUS_VIEW,
     longitude: fitted.longitude,
     latitude: fitted.latitude,
-    zoom: fitted.zoom + 0.35,
+    zoom: fitted.zoom + 0.55,
   };
 }
 const COLORS: Record<ResidentMapState["status"], Color> = {
   no_flagged: [85, 217, 155],
   flagged: [255, 103, 125],
   unavailable: [154, 172, 189],
-  exposed: [255, 103, 125],
+  recovery: [255, 103, 125],
   warned: [85, 217, 155],
   untouched: [154, 172, 189],
 };
 
 interface Props {
   nodes: ResidentMapState[];
-  selectedId: string;
-  onSelect: (id: string) => void;
   simulationPaused: boolean;
 }
 
@@ -127,12 +131,7 @@ function useTrailClock(enabled: boolean) {
 }
 
 /** Renders fictional campus journeys, colored by the existing live/mock resident signals. */
-export default function CampusScene({
-  nodes,
-  selectedId,
-  onSelect,
-  simulationPaused,
-}: Props) {
+export default function CampusScene({ nodes, simulationPaused }: Props) {
   const [paused, setPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -140,7 +139,7 @@ export default function CampusScene({
   const [viewState, setViewState] = useState<MapViewState>(CAMPUS_VIEW);
   const [mapFailed, setMapFailed] = useState(false);
   const [renderError, setRenderError] = useState("");
-  const [hover, setHover] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState("");
   const viewportSize = useRef<{ width: number; height: number } | null>(null);
   const mapContainer = useRef<HTMLDivElement>(null);
   // Clicking outside the map ends inspection without changing the adapter's clock.
@@ -150,8 +149,10 @@ export default function CampusScene({
       if (
         event.target instanceof Node &&
         !mapContainer.current?.contains(event.target)
-      )
+      ) {
         setPaused(false);
+        setSelectedId("");
+      }
     };
     document.addEventListener("pointerdown", resumeOutside);
     return () => document.removeEventListener("pointerdown", resumeOutside);
@@ -199,24 +200,37 @@ export default function CampusScene({
   const running =
     !paused && !reducedMotion && !simulationPaused && !renderError;
   const time = useTrailClock(running);
-  // IDs are the geometry dependency. State changes only recolor trails, never regenerate routes.
-  const populationKey = JSON.stringify(nodes.map((node) => node.id));
+  const displayed = useMemo(
+    () => sampleResidentTrails(nodes, selectedId),
+    [nodes, selectedId],
+  );
+  const trailColors = useTrailColors(displayed, reducedMotion);
+  // Build geometry only for displayed residents. Retained IDs keep identical paths and phases.
+  const populationKey = JSON.stringify(displayed.map((node) => node.id));
   const trips = useMemo(
     () => createResidentTrips(JSON.parse(populationKey) as string[], ANCHORS),
     [populationKey],
   );
   const signals = useMemo(
-    () => new Map(nodes.map((node) => [node.id, node])),
-    [nodes],
+    () => new Map(displayed.map((node) => [node.id, node])),
+    [displayed],
   );
   const investigating = useMemo(
     () => trips.filter((trip) => signals.get(trip.id)?.investigating),
     [trips, signals],
   );
-  const exposed = useMemo(
+  const recovery = useMemo(
     () =>
       trips.filter((trip) =>
-        ["exposed", "flagged"].includes(signals.get(trip.id)?.status ?? ""),
+        ["recovery", "flagged"].includes(signals.get(trip.id)?.status ?? ""),
+      ),
+    [trips, signals],
+  );
+  const ordinary = useMemo(
+    () =>
+      trips.filter(
+        (trip) =>
+          !["recovery", "flagged"].includes(signals.get(trip.id)?.status ?? ""),
       ),
     [trips, signals],
   );
@@ -224,7 +238,14 @@ export default function CampusScene({
     () => trips.filter((trip) => trip.id === selectedId),
     [trips, selectedId],
   );
+  // Keep each batch's fade shorter than its cadence, so subsequent batches never restart it.
+  const colorTransitions = reducedMotion ? null : { getColor: GREEN_FADE_MS };
+  const selectedIsRed = ["recovery", "flagged"].includes(
+    signals.get(selectedId)?.status ?? "",
+  );
+  const selectedFade = reducedMotion || selectedIsRed ? 0 : GREEN_FADE_MS;
   const tripProps = {
+    dataComparator: sameTripData,
     getPath: (trip: ResidentTrip) => trip.path,
     getTimestamps: (trip: ResidentTrip) => trip.timestamps,
     currentTime: time,
@@ -236,7 +257,7 @@ export default function CampusScene({
   const layers = [
     new PathLayer({
       id: "utd-campus-boundary",
-      data: [campusData.boundary],
+      data: BOUNDARY_PATHS,
       getPath: (path) => path as [number, number][],
       getColor: [98, 138, 161, 130],
       widthMinPixels: 1,
@@ -252,7 +273,6 @@ export default function CampusScene({
       stroked: true,
       getLineColor: [225, 237, 245, 190],
       lineWidthMinPixels: 1,
-      pickable: true,
     }),
     new TripsLayer<ResidentTrip>({
       ...tripProps,
@@ -265,32 +285,33 @@ export default function CampusScene({
     new TripsLayer<ResidentTrip>({
       ...tripProps,
       id: "resident-trails",
-      data: trips,
-      getColor: (trip) => COLORS[signals.get(trip.id)?.status ?? "unavailable"],
-      updateTriggers: { getColor: nodes },
+      data: ordinary,
+      transitions: colorTransitions,
+      getColor: (trip) => COLORS[trailColors.get(trip.id) ?? "unavailable"],
+      updateTriggers: { getColor: [trailColors] },
       widthMinPixels: 3,
       opacity: 1,
       pickable: true,
     }),
-    // Red trails render last so numerous green journeys cannot hide exposed residents.
+    // Red trails render last so numerous green journeys cannot hide recovery recipients.
     new TripsLayer<ResidentTrip>({
       ...tripProps,
-      id: "exposed-trails",
-      data: exposed,
-      getColor: COLORS.exposed,
-      widthMinPixels: 3.5,
+      id: "recovery-trails",
+      data: recovery,
+      getColor: COLORS.recovery,
+      widthMinPixels: 5,
       opacity: 1,
       pickable: true,
     }),
     new ScatterplotLayer<ResidentTrip>({
       id: "selected-resident-head",
+      transitions: { getFillColor: selectedFade },
       data: selected,
       getPosition: (trip) => tripPosition(trip, time),
-      updateTriggers: { getPosition: time, getFillColor: nodes },
+      updateTriggers: { getPosition: time, getFillColor: [trailColors] },
       getRadius: 5,
       radiusMinPixels: 4,
-      getFillColor: (trip) =>
-        COLORS[signals.get(trip.id)?.status ?? "unavailable"],
+      getFillColor: (trip) => COLORS[trailColors.get(trip.id) ?? "unavailable"],
       stroked: true,
       getLineColor: [255, 255, 255],
       lineWidthMinPixels: 2,
@@ -307,9 +328,10 @@ export default function CampusScene({
     new TripsLayer<ResidentTrip>({
       ...tripProps,
       id: "selected-trail",
+      transitions: { getColor: selectedFade },
       data: selected,
-      getColor: (trip) => COLORS[signals.get(trip.id)?.status ?? "unavailable"],
-      updateTriggers: { getColor: nodes },
+      getColor: (trip) => COLORS[trailColors.get(trip.id) ?? "unavailable"],
+      updateTriggers: { getColor: [trailColors] },
       widthMinPixels: 4,
     }),
   ];
@@ -331,20 +353,6 @@ export default function CampusScene({
           }
         >
           Reset campus view
-        </button>
-        <button
-          disabled={!selected.length}
-          onClick={() => {
-            const [longitude, latitude] = tripPosition(selected[0], time);
-            setViewState((view) => ({
-              ...view,
-              longitude,
-              latitude,
-              zoom: 16.5,
-            }));
-          }}
-        >
-          Focus selected trail
         </button>
       </div>
       <p id="campus-motion-help" className="muted" aria-live="polite">
@@ -368,8 +376,8 @@ export default function CampusScene({
       )}
       {renderError ? (
         <p role="alert" className="warning-card">
-          The map could not start. Resident details, live notifications, and
-          investigation reports are still available. {renderError}
+          The map could not start. Live notifications and investigation reports
+          are still available. {renderError}
         </p>
       ) : (
         <div
@@ -382,7 +390,11 @@ export default function CampusScene({
             if (event.key === "Escape") {
               event.preventDefault();
               setPaused(false);
-            } else if (event.key === "Enter" || event.key === " ") {
+              setSelectedId("");
+            } else if (
+              event.target === event.currentTarget &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
               event.preventDefault();
               setPaused(true);
             }
@@ -400,16 +412,7 @@ export default function CampusScene({
             onClick={({ object }: PickingInfo<ResidentTrip | CampusAnchor>) => {
               const resident = object && "timestamps" in object ? object : null;
               setPaused(!!resident);
-              if (resident) onSelect(resident.id);
-            }}
-            onHover={({ object }: PickingInfo<ResidentTrip | CampusAnchor>) => {
-              setHover(
-                !object
-                  ? null
-                  : "timestamps" in object
-                    ? `Resident ${object.id} · ${EXPOSURE_LABELS[signals.get(object.id)?.status ?? "unavailable"]}`
-                    : object.name,
-              );
+              setSelectedId(resident?.id ?? "");
             }}
             onError={(error) => setRenderError(error.message)}
           >
@@ -429,10 +432,18 @@ export default function CampusScene({
               </BaseMap>
             )}
           </DeckGL>
-          <div className="pointer-events-none absolute left-3 top-3 max-w-[85%] rounded bg-background/90 px-3 py-2 text-xs">
-            <p className="font-medium">UT DALLAS</p>
-            {hover && <p className="mt-1 text-muted">{hover}</p>}
+          <div className="pointer-events-none absolute left-3 top-3 max-w-[85%] rounded bg-background/90 px-4 py-3 text-sm sm:text-base">
+            <p className="font-semibold">UT DALLAS</p>
           </div>
+          <ResidentPhoneOverlay
+            resident={paused ? (signals.get(selectedId) ?? null) : null}
+            reducedMotion={reducedMotion}
+            onClose={() => {
+              setPaused(false);
+              setSelectedId("");
+              mapContainer.current?.focus();
+            }}
+          />
         </div>
       )}
       <p className="text-xs text-muted">
