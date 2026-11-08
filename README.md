@@ -1,232 +1,156 @@
-# Patient Zero — HackUTD 2026
-Catch zero-day scam campaigns by how fast they spread, warn people before they open.
+# 🦠 Patient Zero
 
-## Setup
+### Catch the scam on its 6th message, not its 6,000th, without reading a single text.
+
+**HackUTD 2026 · Zero Day · T-Mobile track** · Live demo: **https://patientzero.fishing**
+
+---
+
+## 30-second version
+
+Scam texts don't hit one person. They hit **thousands of strangers within minutes**, and every new campaign has wording no classifier has seen before. That makes each one a *zero-day*.
+
+More and more texting is moving to **end-to-end encrypted** apps (iMessage, RCS, WhatsApp), where the carrier can't read the messages, so it can't filter them.
+
+**Patient Zero doesn't read the message. It watches how the message spreads.**
+
+1. 📱 **Each phone sends only a fingerprint** (a 64-bit SimHash), never the text.
+2. 🚨 **A sentinel spots the burst:** near-identical fingerprints hitting many unrelated people within seconds, from an unknown sender.
+3. 🧠 **NVIDIA Nemotron reasons over metadata only.** It decides whether differently-worded clusters are one coordinated campaign: an AI attacker rewording the scam to slip past detection.
+4. 🛡️ **Everyone gets warned:** a preemptive Scam Shield alert for the thousands who haven't been hit yet, and a recovery checklist for the few who were.
+
+All of it runs live on **SpacetimeDB**. You press one button and watch a city of 5,000 residents go from outbreak to shielded.
+
+---
+
+## What the judges see
+
+Press **Simulate** in the Command Center and the whole pipeline runs for real:
+
+```
+ Attacker (Gemini variants) ──► SpacetimeDB ──► Detector (SimHash + velocity) ──► Nemotron (metadata only)
+                                     ▲                                                     │
+                                     └──── flag_campaign: alerts + recovery notifications ─┘
+                                                            │
+                                         Live map · terminal · two phones light up
+```
+
+- 🗺️ **3D campus map:** 5,000 simulated residents. Red trails show who got hit, then the green shield spreads to everyone else.
+- 💻 **Live terminal:** the attacker and detector logs stream straight from the backend into the browser.
+- 🧠 **Nemotron card:** verdict, confidence, how many reworded variants it linked, the time from first to last exposed message, and its reasoning.
+- 📲 **Two phones:** one lock screen wakes with the *preemptive alert*, the other with the *recovery guidance*, at the moment of detection.
+- 🔁 **Reset city:** reseeds a fresh 5,000 residents for the next judge.
+
+### Three attack styles, three different outcomes
+
+Each scenario is a different attack shape. Nothing in the UI is hardcoded; every number below comes out of the pipeline at run time.
+
+| Scenario | Attack shape | Typical result in our runs |
+|---|---|---|
+| 📦 **Package fee** | Small steady waves (3 texts every ~0.5s) | Caught after **~6 exposed**, ~95% confidence |
+| 🚗 **Toll spray** | Goes viral: every wave doubles | Caught after **~7 exposed**, ~95% confidence |
+| 🏦 **Bank alert drip** | One text at a time, to stay under the radar | Caught after **~4 exposed**, ~85% confidence |
+
+**→ About 4,994 of 5,000 residents warned before the scam ever reaches them.**
+
+---
+
+## Why this matters for T-Mobile
+
+- **It covers the blind spot.** Carriers already catch SMS campaigns by watching volume. On encrypted channels the network goes blind; Patient Zero brings that visibility back with fingerprints only.
+- **It warns people who already got the scam**, not only blocks future copies.
+- **Honest confidence.** Nemotron reports how sure it is and why. A pending or failed investigation is never presented as a verdict.
+- **Privacy by design.** Nemotron never sees message text, only cluster sizes, recipient counts, timing and fingerprints. Known senders (newsletters, your bank's real alerts) are never flagged.
+- **It fits the product.** Imagine it as a feature inside T-Life's Scam Shield, not another app.
+
+---
+
+## Under the hood
+
+| Layer | What it does | Built with |
+|---|---|---|
+| **Attacker** | Lightly rewords each scam (cached variants) and blasts it in waves | Gemini, Python |
+| **Real-time state** | Residents, messages, notifications, incidents, sim runs and logs. Every client syncs live | **SpacetimeDB** (TypeScript module) |
+| **Sentinel** | SimHash clustering (Hamming ≤ 22). Flags when ≥ 4 messages reach ≥ 3 recipients within 10s from an unknown sender | Python |
+| **Investigator** | Decides whether separate fingerprint clusters are one coordinated campaign. Writes the warning and recovery steps | **NVIDIA Nemotron** (`nemotron-3.5-bolt-e4b`) |
+| **Command Center** | 3D campus map, live terminal, Nemotron card, notification phones | React 19, deck.gl, MapLibre, Tailwind |
+| **Hosting** | Spacetime, the detector, the sim runner and the static site on one box | **Vultr** |
+
+The 5,000 residents are synthetic. Each one has a persona, an age, a location and a "weak spot". The personas were generated once with Gemini and are committed (`simulation/data/personas.json`). No real people or messages are involved.
+
+---
+
+## Run it yourself
+
+**Requirements:** Python 3.11+, Node 20+, the [SpacetimeDB CLI](https://spacetimedb.com/install), and API keys in `.env` (`GEMINI_API_KEY`, `NVIDIA_API_KEY`). `.env` is gitignored; never commit it.
+
+```bash
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # add your keys
+pip install -r requirements.txt requests
+cp .env.example .env                                   # add your keys
 
-## Run detection PoC
-python detection/detection_poc.py
+spacetime start                                        # terminal 1: local DB on 127.0.0.1:3000
+cd backend/spacetime && spacetime publish -s local patient-zero-db -y && cd ../..
+python simulation/seed_spacetime.py                    # 5,000 residents
 
-## Ownership
-- simulation/ -> Person 1
-- detection/  -> Person 2
-- backend/    -> Person 3
-- frontend/   -> Person 4
+python -m detection.live_detect                        # terminal 2: detector + Nemotron
+python -m simulation.sim_runner                        # terminal 3: runs attacks when you press Simulate
 
-Lock shared/schema.py together first, then work in your own folder.
-EOF
-
-## React frontend (Person 4)
-
-The minimal three-view frontend lives in `frontend/`. Run `cd frontend && npm ci && npm run dev`; use `npm run build` for TypeScript and production build checks. All data is clearly labeled local mock data, behind a replaceable adapter. See [frontend/README.md](frontend/README.md) for expected data contracts, privacy boundaries, and SpacetimeDB integration dependencies. No Nemotron integration is included yet.
-
-## Run Spacetime locally (backend/)
-The module is TypeScript (`backend/spacetime/spacetimedb/src/index.ts`); clients are plain JS (`backend/client/`).
-On Windows the CLI lives at `%LOCALAPPDATA%\SpacetimeDB\spacetime.exe` (add that folder to PATH to type `spacetime`).
-
-```
-spacetime start                                   # local server on 127.0.0.1:3000 (leave running)
-cd backend/spacetime
-spacetime publish -s local patient-zero-db -y     # always pass -s local; spacetime.json defaults to maincloud
-spacetime call -s local patient-zero-db add '"Vishnu"'
-spacetime sql  -s local patient-zero-db "SELECT * FROM person"
-
-cd ../client
-npm install
-npm run generate                                  # regenerate bindings after any module change
-node test_client.js YourName                      # prints PASS when the live insert arrives
+cd frontend && npm ci
+VITE_DATA_MODE=live VITE_SPACETIME_URI=ws://127.0.0.1:3000 VITE_SPACETIME_DB=patient-zero-db npm run dev
 ```
 
-## Deploy (Vultr)
-Code changes go through GitHub; the server only pulls and deploys. On the server:
+Open the URL Vite prints, then press **Reset city** and pick a scenario. Prefer the command line? `python -m simulation.attacker toll` runs one scenario without the UI.
 
-```
-bash scripts/deploy.sh                    # git pull + rebuild frontend into /var/www/app
+**Frontend only, no backend:** `cd frontend && npm ci && npm run dev` starts a clearly labeled mock mode.
+**Tests:** `cd frontend && npm run test`
+
+### Deploy (Vultr)
+Code reaches the server through GitHub; the server only pulls and deploys:
+```bash
+bash scripts/deploy.sh                    # pull + rebuild the frontend
 bash scripts/deploy.sh --backend          # also republish the Spacetime module
 bash scripts/deploy.sh --backend --seed   # also reseed the 5,000 residents
 ```
+The detector and sim runner run in `tmux` on the server (`detect` and `runner` sessions).
 
-From your laptop, in one line:
+---
 
-```
-ssh root@149.28.246.156 "bash /root/patient-zero/scripts/deploy.sh"
-```
-
-The frontend build needs `frontend/.env.production` (live mode, `wss://db.149-28-246-156.sslip.io`, `patient-zero-db`). Site: https://149-28-246-156.sslip.io
-
-## Seed Avon residents (backend/ + simulation/)
-Gemini generated the personas once (`simulation/data/personas.json`, committed). Seeding is plain Python, no LLM.
+## Repo map
 
 ```
-cd backend/spacetime
-spacetime publish -s local patient-zero-db --delete-data=on-conflict -y   # adds resident + resident_profile tables
-cd ../client && npm run generate                                         # refresh client bindings
-cd ../..
-pip install -r requirements.txt
-python simulation/generate_personas.py      # ONLY to regenerate personas.json (needs GEMINI_API_KEY in .env)
-python simulation/residents.py --count 5000 # -> simulation/data/residents.json (seed 42, deterministic)
-python simulation/seed_spacetime.py         # clear + load in batches of 500; prints row counts
-# Vultr: python simulation/seed_spacetime.py --host https://db.149-28-246-156.sslip.io
-spacetime sql -s local patient-zero-db "SELECT COUNT(*) AS n FROM resident"
+simulation/   attacker.py · scenarios.json · variants.json · sim_runner.py · seed_spacetime.py · residents.py
+detection/    simhash.py · detector.py · investigator.py (Nemotron) · live_detect.py · spacetime_client.py
+backend/      spacetime/spacetimedb/src/index.ts   (tables + reducers)
+frontend/     React Command Center: campus map, SimulatePanel, LiveNotifications (see frontend/README.md)
+scripts/      deploy.sh
 ```
 
+<details>
+<summary><b>SpacetimeDB tables & reducers</b></summary>
 
+**Tables**
+- `resident`: `{id, persona, exposed, warned, opened}`. Drives the map colors.
+- `resident_profile`: `{resident_id, name, age, district, x, y, weak_spot, …}`
+- `message`: the scam blasts. The frontend never subscribes to it, so the browser never sees scam text.
+- `notification`: `{recipient_id, kind: "alert" | "recovery", text}`
+- `incident`: the Nemotron verdict for each campaign. Status, confidence, reasoning, warning text, variants, cluster metadata, time spread.
+- `scenario`, `sim_run`, `pipeline_log`: the Simulate button, the run queue and the live terminal.
 
+**Reducers**
+- `start_campaign(text, n)`: blasts the text to n residents who haven't been exposed yet.
+- `flag_campaign()`: writes recovery notifications for exposed residents and alerts for everyone else.
+- `report_incident(…)`: saves Nemotron's investigation ("investigating", then "complete" or "failed").
+- `request_simulation(scenario_id)` / `request_reset()`: queue work for `sim_runner.py`. Only one run can be active at a time.
+- `seed_residents_batch`, `clear_residents`, `register_scenario`, `update_sim_run`, `log_line`
+</details>
 
-## SpacetimeDB Module (`backend/spacetime/spacetimedb/src/index.ts`)
+<details>
+<summary><b>"How would a real phone fingerprint an iMessage?"</b></summary>
 
-### Tables
-- **resident** (locked schema): `{id, persona, exposed, warned, opened}` — the core state the MAP reads
-- **resident_profile**: `{resident_id, name, age, district, x, y, weak_spot, susceptibility, open_delay_s}` — map coords + sim detail
-- **message**: `{id, sender_id, sender_known, recipient_id, text, timestamp, campaign_id}` — the scam blasts
-- **notification**: `{id, recipient_id, kind, text}` — `kind` is "recovery" (exposed victims) or "alert" (protected)
+An iPhone app can't read your messages. In production this would ship inside the messaging client itself (an RCS or Android messages app with permission, or through a platform partnership). That's why the demo uses simulated phones. The fingerprint, detect and warn pipeline is the same whichever app it runs in. A daily random salt on the fingerprint stops anyone linking fingerprints across days.
+</details>
 
-### Reducers
-- **seed_residents_batch(rows)** — seeds 5000 residents (called by `simulation/seed_spacetime.py`)
-- **clear_residents()** — wipes residents for reseed
-- **start_campaign(scam_text, num_targets)** — scammer blasts scam_text to N UNEXPOSED residents, marks them `exposed=true`
-- **flag_campaign()** — called by Python on detection:
-  - `exposed` residents → inserts "recovery" notification
-  - everyone else → inserts "alert" notification + marks `warned=true`
+---
 
-## Python Detection Layer (`detection/`)
-
-- **simhash.py** — `simhash(text)` → 64-bit privacy-preserving fingerprint; `hamming(a,b)` → bit distance
-- **detector.py** — `detect(messages, now, total_residents)`:
-  - clusters messages by fingerprint similarity (hamming ≤ 22)
-  - flags when velocity ≥ threshold AND distinct recipients ≥ 3 AND sender unknown
-  - returns `{flagged, infected[], protected_count, num_clusters, cluster_meta, ...}`
-  - privacy guard: known-sender bursts (newsletters) never flag
-- **investigator.py** — `investigate(cluster_meta, total_msgs, total_recipients)`:
-  - sends CLUSTER METADATA ONLY (no text — respects E2E encryption) to Nemotron
-  - Nemotron reasons whether separate fingerprint-clusters are ONE coordinated campaign (catches LLM-rephrased variants)
-  - returns `{is_coordinated_attack, confidence, reasoning, num_variants, ...}`
-- **spacetime_client.py** — HTTP bridge to Spacetime:
-  - `query(sql)` → reads any table as list of dicts
-  - `call_reducer(name, args)` → calls a reducer
-  - BASE url: set via env (local vs Vultr, see below)
-- **live_detect.py** — the main loop: polls message table → detect → flag_campaign → Nemotron report. Run this.
-
-## Attacker Simulation (`simulation/attacker.py`)
-- Uses Gemini (cached in `simulation/variants.json`) to generate lightly-reworded scam variants
-- Different wordings → different fingerprints → multiple clusters → Nemotron unifies them
-- Replays cached variants fast (no live Gemini rate-limit risk)
-
-## HOW TO RUN (local)
-
-Terminal 1 — Spacetime DB (leave running):
-```bash
-spacetime start
-```
-Terminal 2 — publish + seed:
-```bash
-cd backend/spacetime/spacetimedb && spacetime publish -s local patient-zero-db && cd ~/patient-zero
-python3 simulation/seed_spacetime.py
-```
-Terminal 3 — detection poller (leave running):
-```bash
-python3 -m detection.live_detect
-```
-Terminal 2 — launch attack:
-```bash
-python3 -m simulation.attacker
-```
-Watch Terminal 3: detect → protect → Nemotron incident report.
-
-### Simulate button (frontend → full pipeline)
-Run these two next to each other (locally or in tmux on Vultr), then press **Simulate** in Command Center:
-```bash
-python3 -m detection.live_detect     # detector + Nemotron (logs stream to the UI)
-python3 -m simulation.sim_runner     # runs the attacker when Simulate is pressed
-```
-- Scenarios live in `simulation/scenarios.json` (scam text + attack shape: `wave_size`, `waves`, `interval_s`).
-  Gemini variants are cached in `simulation/variants.json`, keyed by scenario id.
-- Each press calls `request_simulation`, which resets the last run (messages, notifications, incidents,
-  logs, resident flags) and queues a `sim_run`. Its id becomes the campaign id (`run-<id>`), so every run is flagged.
-- The terminal window reads `pipeline_log`; the Nemotron card reads `incident`. Nothing in the UI is hardcoded.
-- `python3 -m simulation.attacker toll` still runs one scenario from the CLI (no argument = package fee).
-
-## HOW TO RUN ON VULTR
-
-The shared instance is at `https://db.149-28-246-156.sslip.io` (db name: `patient-zero-db`).
-Team rule: only `scripts/deploy.sh` on the server changes the shared Vultr DB.
-
-1. Merge this branch to main.
-2. Deploy module to Vultr (run `scripts/deploy.sh` or):
-   ```bash
-   spacetime server add vultr --url https://db.149-28-246-156.sslip.io
-   spacetime publish -s vultr patient-zero-db
-   ```
-3. Point Python at Vultr — set env before running `live_detect.py`:
-   ```bash
-   export SPACETIME_URL=https://db.149-28-246-156.sslip.io
-   python3 -m detection.live_detect
-   ```
-   (spacetime_client.py reads SPACETIME_URL, defaults to localhost)
-
-## WIRING INTO THE FRONTEND — THE GRAND MAP
-
-The frontend already subscribes to Spacetime tables and auto-syncs. To drive the map:
-
-### Map dot colors — read the `resident` table, color by state:
-- `exposed == true` → **RED** (hit by scam — the ~6 victims)
-- `warned == true` → **GREEN** (protected — the ~4994 saved)
-- neither → **GREY/NEUTRAL** (untouched)
-- Position each dot by `resident_profile.x, y` (0..1 normalized map coords)
-
-### The animation sequence (what judges see):
-1. Attack starts → a few dots flash RED (exposed residents, in one district)
-2. Detection fires → `flag_campaign` runs → GREEN WAVE sweeps across all other dots
-3. Result: small red outbreak, massive green shield = "caught early, city protected"
-
-### Notifications panel — read the `notification` table:
-- `kind == "recovery"` → show recovery checklist for exposed victims
-- `kind == "alert"` → show preemptive warning for protected residents
-- Display `notification.text` as the message content
-
-### Incident report / ops console — Nemotron output (`incident` table):
-`live_detect.py` calls the `report_incident` reducer twice per campaign: `status = "investigating"`
-when Nemotron starts, then `"complete"` (or `"failed"`) with the verdict. One row per campaign:
-
-| column | meaning |
-|---|---|
-| `campaign_id` | campaign that was detected (PK) |
-| `status` | `investigating` / `complete` / `failed` |
-| `is_coordinated`, `confidence` | Nemotron verdict, confidence 0-100 |
-| `reasoning`, `warning_text` | Nemotron's explanation and suggested carrier warning |
-| `num_variants` | fingerprint clusters Nemotron linked into one campaign |
-| `cluster_meta` | JSON array of cluster metadata (size, recipients, time spread; never message text) |
-| `created_at`, `updated_at` | timestamps |
-
-Reset between runs: `spacetime call -s local patient-zero-db clear_incidents`.
-
-### Frontend: notifications + Nemotron feed (live mode)
-The live adapter subscribes to `notification` and `incident` (never `message`, which holds scam text)
-and exposes them on the snapshot as `data.liveFeed`. In a component:
-
-```tsx
-import { useLiveFeed } from "../data/useLiveFeed";
-
-const feed = useLiveFeed(data);          // data = the snapshot App already passes down
-feed.latestIncident?.status              // "investigating" | "complete" | "failed"
-feed.latestIncident?.confidence          // 0-100
-feed.latestIncident?.reasoning           // Nemotron's explanation
-feed.latestIncident?.clusterMeta         // [{ size, distinct_recipients, time_spread_s, ... }]
-feed.alertCount, feed.recoveryCount      // rows written by flag_campaign
-feed.notificationsFor(residentId)        // one resident's alert / recovery messages
-```
-
-Types live in `frontend/src/data/contracts.ts` (`LiveFeed`, `LiveIncident`, `LiveNotification`).
-In mock mode the feed is empty (`feed.available === false`), so components can render unconditionally.
-
-### Live metrics (read from resident table counts):
-- Exposed count = `SELECT COUNT(*) FROM resident WHERE exposed = true`
-- Protected count = `SELECT COUNT(*) FROM resident WHERE warned = true`
-- "Detected after N messages" / "X protected" — the headline numbers
-
-### Key point for frontend dev:
-Spacetime auto-pushes table changes to subscribed clients. So when Python calls
-`flag_campaign`, the `resident.warned` fields update → the map's green wave happens
-AUTOMATICALLY if the map is subscribed to the resident table. No manual websocket wiring.
+<sub>Built in 24 hours at HackUTD 2026. All residents, messages and scams are synthetic. Open-source pieces: SpacetimeDB, React, deck.gl, MapLibre. Models: NVIDIA Nemotron and Google Gemini.</sub>
