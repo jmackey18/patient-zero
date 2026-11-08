@@ -1,9 +1,23 @@
-[
-  
-  "Your parcel is on hold. Pay the $2 fee here: usps-tracking.xyz/pay",
-  "USPS: delivery failed, a $2 redelivery charge is due at usps-track.xyz/fee",
-  "Action needed — settle your 2 dollar postage balance now: uspstrack.xyz",
-  "We attempted delivery. Unpaid customs fee $2. Resolve: usps-tracking.xyz/pay",
-  "Package waiting. Small handling fee required. Click usps-track.xyz to release"
-
-]
+{
+  "package": [
+    "Your parcel is on hold. Pay the $2 fee here: usps-tracking.xyz/pay",
+    "USPS: delivery failed, a $2 redelivery charge is due at usps-track.xyz/fee",
+    "Action needed — settle your 2 dollar postage balance now: uspstrack.xyz",
+    "We attempted delivery. Unpaid customs fee $2. Resolve: usps-tracking.xyz/pay",
+    "Package waiting. Small handling fee required. Click usps-track.xyz to release"
+  ],
+  "toll": [
+    "NTTA: Your toll charge of $3.75 is overdue. Pay today to avoid a $50 late fee: ntta-tollpay.xyz",
+    "NTTA: Your toll bill of $3.75 is overdue. Pay immediately to avoid a $50 late charge: ntta-tollpay.xyz",
+    "NTTA: Your toll invoice of $3.75 is overdue. Pay now to avoid a $50 late fee: ntta-tollpay.xyz",
+    "NTTA Notice: Your toll charge of $3.75 is overdue. Pay today to prevent a $50 late fee: ntta-tollpay.xyz",
+    "NTTA Notice: Your toll balance of $3.75 is overdue. Pay today to avoid a $50 penalty: ntta-tollpay.xyz"
+  ],
+  "bank": [
+    "Chase Notice: suspicious login detected on your account. Confirm your identity now at chase-secure-verify.co or your card will be blocked",
+    "Chase Warning: suspicious login detected on your account. Verify your details now at chase-secure-verify.co or your card will be suspended",
+    "Chase Security: suspicious login detected on your account. Confirm your identity now at chase-secure-verify.co or your card will be suspended",
+    "Chase Notice: suspicious login detected on your account. Verify your identity now at chase-secure-verify.co or your card will be suspended",
+    "Chase Notice: suspicious login detected on your account. Verify your identity today at chase-secure-verify.co or your account will be blocked"
+  ]
+}

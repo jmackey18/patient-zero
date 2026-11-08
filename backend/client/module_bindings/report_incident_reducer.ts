@@ -19,4 +19,5 @@ export default {
   warningText: __t.string(),
   numVariants: __t.u32(),
   clusterMeta: __t.string(),
+  timeSpreadS: __t.f32(),
 };

@@ -1,0 +1,31 @@
+[
+  {
+    "id": "package",
+    "label": "Package fee",
+    "description": "Fake delivery-fee text, lightly reworded. Small steady waves.",
+    "base_scam": "Your package is on hold. Pay the $2 fee here: usps-tracking.xyz/pay",
+    "wave_size": 3,
+    "waves": 20,
+    "interval_s": 0.5
+  },
+  {
+    "id": "toll",
+    "label": "Toll spray",
+    "description": "Unpaid-toll text that ramps up like a viral spread: each wave doubles.",
+    "base_scam": "NTTA: Your toll balance of $3.75 is past due. Pay now to avoid a $50 late fee: ntta-tollpay.xyz",
+    "wave_size": 1,
+    "waves": 8,
+    "interval_s": 0.5,
+    "growth": 2,
+    "max_wave": 10
+  },
+  {
+    "id": "bank",
+    "label": "Bank alert drip",
+    "description": "Fake bank security alert, sent one message at a time to stay under the radar.",
+    "base_scam": "Chase Alert: unusual sign-in detected on your account. Verify your identity now at chase-secure-verify.co or your card will be locked",
+    "wave_size": 1,
+    "waves": 25,
+    "interval_s": 1.5
+  }
+]
