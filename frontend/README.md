@@ -59,3 +59,11 @@ The current `shared/schema.py` differs from the spec: it includes plaintext and 
 `src/App.tsx` owns navigation, adapter subscriptions, and action feedback. The three view components live in `src/views/`; they receive data and callbacks through props. Resident/scenario selections remain in the app so switching views preserves them. Mock records are built in `src/data/mockFixtures.ts`, while `mockAdapter.ts` handles state updates and subscriptions.
 
 Run `npm run format` to format frontend files with Prettier, or `npm run format:check` to check formatting without modifying files.
+
+## Design port
+
+The Lovable export’s dark theme, navigation, dashboard panels, warning log, phone frame, and console layout are adapted into the existing Vite app. System font fallbacks keep the demo usable without external font requests. No new runtime dependencies were added. The existing adapter, contracts, fixtures, resident selection, acknowledgment, scenario loading, and reset behavior are preserved.
+
+Dashboard counts and the warning log read the adapter snapshot. Warnings are labeled as created or acknowledged, not delivered or protective. Invented model-confidence percentages, confirmed verdicts, SMS delivery, and extra simulation controls from the export are not included. SpacetimeDB and Nemotron integration dependencies remain unchanged.
+
+Verified after the port: TypeScript/production build; browser navigation, acknowledgment reflected in the dashboard, resident-specific warnings, benign scenario loading, reset, and desktop/narrow-screen layouts.
