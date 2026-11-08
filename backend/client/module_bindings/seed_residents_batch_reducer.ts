@@ -12,7 +12,7 @@ import {
 
 import {
   SeedRow,
-} from "./types.ts";
+} from "./types";
 
 export default {
   get rows() {

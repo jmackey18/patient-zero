@@ -173,10 +173,40 @@ The frontend already subscribes to Spacetime tables and auto-syncs. To drive the
 - `kind == "alert"` → show preemptive warning for protected residents
 - Display `notification.text` as the message content
 
-### Incident report / ops console — from Python's Nemotron output:
-- The `investigate()` result (`is_coordinated_attack, confidence, reasoning, num_variants`)
-  is printed by live_detect.py. To show it on the frontend, Python should ALSO write it
-  to a table (e.g. an `incident` table) that the frontend reads. [TODO if time: add incident table]
+### Incident report / ops console — Nemotron output (`incident` table):
+`live_detect.py` calls the `report_incident` reducer twice per campaign: `status = "investigating"`
+when Nemotron starts, then `"complete"` (or `"failed"`) with the verdict. One row per campaign:
+
+| column | meaning |
+|---|---|
+| `campaign_id` | campaign that was detected (PK) |
+| `status` | `investigating` / `complete` / `failed` |
+| `is_coordinated`, `confidence` | Nemotron verdict, confidence 0-100 |
+| `reasoning`, `warning_text` | Nemotron's explanation and suggested carrier warning |
+| `num_variants` | fingerprint clusters Nemotron linked into one campaign |
+| `cluster_meta` | JSON array of cluster metadata (size, recipients, time spread; never message text) |
+| `created_at`, `updated_at` | timestamps |
+
+Reset between runs: `spacetime call -s local patient-zero-db clear_incidents`.
+
+### Frontend: notifications + Nemotron feed (live mode)
+The live adapter subscribes to `notification` and `incident` (never `message`, which holds scam text)
+and exposes them on the snapshot as `data.liveFeed`. In a component:
+
+```tsx
+import { useLiveFeed } from "../data/useLiveFeed";
+
+const feed = useLiveFeed(data);          // data = the snapshot App already passes down
+feed.latestIncident?.status              // "investigating" | "complete" | "failed"
+feed.latestIncident?.confidence          // 0-100
+feed.latestIncident?.reasoning           // Nemotron's explanation
+feed.latestIncident?.clusterMeta         // [{ size, distinct_recipients, time_spread_s, ... }]
+feed.alertCount, feed.recoveryCount      // rows written by flag_campaign
+feed.notificationsFor(residentId)        // one resident's alert / recovery messages
+```
+
+Types live in `frontend/src/data/contracts.ts` (`LiveFeed`, `LiveIncident`, `LiveNotification`).
+In mock mode the feed is empty (`feed.available === false`), so components can render unconditionally.
 
 ### Live metrics (read from resident table counts):
 - Exposed count = `SELECT COUNT(*) FROM resident WHERE exposed = true`
