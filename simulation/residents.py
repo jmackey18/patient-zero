@@ -55,7 +55,7 @@ def make_residents(personas, count, seed):
         rows.append(row)
     return rows
 
-
+#commit
 def print_summary(rows):
     print(f"{len(rows)} residents")
     for field in ("persona", "district", "weak_spot"):
