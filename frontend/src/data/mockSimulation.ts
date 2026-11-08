@@ -4,7 +4,7 @@ import type {
   Snapshot,
   MockPropagationEvent,
 } from "./contracts";
-import { residentPosition, syntheticLayoutLinks } from "../lib/networkLayout";
+import { mockForwardingLinks } from "./mockTopology";
 
 export const MOCK_TICK_MS = 750;
 export const MOCK_BATCH_SIZE = 25;
@@ -34,20 +34,16 @@ interface PlannedTransmission {
 
 /** Plans forwarding through the internal fictional topology; these edges are never drawn as real contacts. */
 function planMockSpread(residents: Resident[]): PlannedTransmission[] {
-  const points = residents.map((resident) => residentPosition(resident.id));
-  const neighbors = new Map(points.map((point) => [point.id, [] as string[]]));
-  for (const link of syntheticLayoutLinks(points)) {
+  const ids = residents.map((resident) => resident.id).sort();
+  const neighbors = new Map(ids.map((id) => [id, [] as string[]]));
+  for (const link of mockForwardingLinks(ids)) {
     neighbors.get(link.sourceId)!.push(link.targetId);
     neighbors.get(link.targetId)!.push(link.sourceId);
   }
-  const seed = [...points].sort(
-    (a, b) => a.x - b.x || a.id.localeCompare(b.id),
-  )[0];
+  const seed = ids[0];
   if (!seed) return [];
-  const plan: PlannedTransmission[] = [
-    { sourceId: null, recipientId: seed.id },
-  ];
-  const seen = new Set([seed.id]);
+  const plan: PlannedTransmission[] = [{ sourceId: null, recipientId: seed }];
+  const seen = new Set([seed]);
   for (let index = 0; index < plan.length; index++) {
     const parent = plan[index].recipientId;
     for (const child of neighbors.get(parent)!) {

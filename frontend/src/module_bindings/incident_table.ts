@@ -19,6 +19,7 @@ export default __t.row({
   warningText: __t.string().name("warning_text"),
   numVariants: __t.u32().name("num_variants"),
   clusterMeta: __t.string().name("cluster_meta"),
+  timeSpreadS: __t.f32().name("time_spread_s"),
   createdAt: __t.timestamp().name("created_at"),
   updatedAt: __t.timestamp().name("updated_at"),
 });

@@ -1,18 +1,24 @@
 import type { Snapshot } from "../../data/contracts";
-import { residentPosition, type GraphPoint } from "../../lib/networkLayout";
 
-type ExposureStatus = "no_flagged" | "flagged" | "unavailable";
+type ExposureStatus =
+  "no_flagged" | "flagged" | "unavailable" | "exposed" | "warned" | "untouched";
 
 export const EXPOSURE_COLORS: Record<ExposureStatus, string> = {
   no_flagged: "#55d99b",
   flagged: "#ff677d",
   unavailable: "#9aacbd",
+  exposed: "#ff677d",
+  warned: "#55d99b",
+  untouched: "#9aacbd",
 };
 
 export const EXPOSURE_LABELS: Record<ExposureStatus, string> = {
   no_flagged: "No flagged message observed",
   flagged: "Flagged message received",
   unavailable: "Detection data unavailable",
+  exposed: "Exposed · backend simulation",
+  warned: "Warned · backend simulation",
+  untouched: "Untouched · no exposure/warning",
 };
 
 interface ResidentSignal {
@@ -24,22 +30,39 @@ interface ResidentSignal {
   acknowledgedCount: number;
 }
 
-export interface ResidentNode extends GraphPoint, ResidentSignal {}
+export interface ResidentMapState extends ResidentSignal {
+  id: string;
+}
 
 /** Joins observed records in linear time; warnings and AI investigation never overwrite exposure. */
 export function residentSignals(data: Snapshot): Map<string, ResidentSignal> {
   const signals = new Map<string, ResidentSignal>();
   for (const resident of data.residents) {
+    let status: ExposureStatus = data.connection ? "unavailable" : "no_flagged";
+    if (data.connection && resident.liveState) {
+      // Backend exposure wins over warning; neither implies an AI verdict or avoided harm.
+      status = resident.liveState.exposed
+        ? "exposed"
+        : resident.liveState.warned
+          ? "warned"
+          : "untouched";
+    }
     signals.set(resident.id, {
-      // Current live snapshots have connection metadata but no detection subscriptions.
-      // Replace this availability check when the adapter exposes explicit feed capabilities.
-      status: data.connection ? "unavailable" : "no_flagged",
+      status,
       investigating: false,
       messageCount: 0,
       flaggedCount: 0,
       warningCount: 0,
       acknowledgedCount: 0,
     });
+  }
+  if (data.connection) {
+    for (const notification of data.liveFeed?.notifications ?? []) {
+      const signal = signals.get(notification.recipientId);
+      if (signal) signal.warningCount++;
+    }
+    // Incidents contain no resident membership; do not infer per-resident investigation overlays.
+    return signals;
   }
   const flagged = new Set(
     data.campaigns
@@ -48,7 +71,7 @@ export function residentSignals(data: Snapshot): Map<string, ResidentSignal> {
   );
   // This overlay is currently a timed-mock capability, never inferred from live resident data.
   const investigating = new Set(
-    data.mockSimulation && !data.connection
+    data.mockSimulation
       ? data.campaigns
           .filter((campaign) => campaign.investigationStatus === "pending")
           .map((campaign) => campaign.clusterId)
@@ -77,11 +100,11 @@ export function residentSignals(data: Snapshot): Map<string, ResidentSignal> {
   return signals;
 }
 
-/** One dot for every resident; no sampling or pagination of the WebGL population. */
-export function constellationNodes(data: Snapshot): ResidentNode[] {
+/** Joins resident IDs to display signals without computing unused geographic positions. */
+export function residentMapStates(data: Snapshot): ResidentMapState[] {
   const signals = residentSignals(data);
   return data.residents.map((resident) => ({
-    ...residentPosition(resident.id),
+    id: resident.id,
     ...signals.get(resident.id)!,
   }));
 }

@@ -17,7 +17,7 @@ interface Props {
   onReset: () => void;
 }
 
-/** Controls and progress stay available beside the graph; scripted phases are explicit. */
+/** Controls and progress stay available beside the map; scripted phases are explicit. */
 export function MockSimulationControls({
   data,
   scenario,
@@ -40,15 +40,15 @@ export function MockSimulationControls({
         <span className="badge">{state?.status ?? "ready"}</span>
       </div>
       <p className="muted">
-        A fictional message enters at one node and spreads through the synthetic
-        network. Suspicious traffic is scripted to be flagged at{" "}
-        {(MOCK_DETECTION_TICK * MOCK_TICK_MS) / 1000} seconds. Blue rings mark
-        recipients associated with the campaign during its scripted
-        investigation ({(MOCK_INVESTIGATION_START_TICK * MOCK_TICK_MS) / 1000}–
+        A fictional message enters with one resident and spreads through the
+        synthetic network. Suspicious traffic is scripted to be flagged at{" "}
+        {(MOCK_DETECTION_TICK * MOCK_TICK_MS) / 1000} seconds. Blue trail
+        outlines mark recipients associated with the campaign during its
+        scripted investigation (
+        {(MOCK_INVESTIGATION_START_TICK * MOCK_TICK_MS) / 1000}–
         {(MOCK_INVESTIGATION_END_TICK * MOCK_TICK_MS) / 1000} simulated
-        seconds). Warning records follow detection. Enable Show warning rings in
-        the graph to overlay them. This is a UI demonstration, not the real
-        detector or Nemotron.
+        seconds). Warning records follow detection. This is a UI demonstration,
+        not the real detector or Nemotron.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <label className="block min-w-0 text-sm">
@@ -103,7 +103,7 @@ export function MockSimulationControls({
           <p>
             Scripted campaign investigation:{" "}
             {data.campaigns[0]?.investigationStatus === "pending"
-              ? "in progress — blue rings visible"
+              ? "in progress — blue trail outlines visible"
               : (
                   data.campaigns[0]?.investigationStatus ?? "not_requested"
                 ).replaceAll("_", " ")}

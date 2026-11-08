@@ -15,10 +15,10 @@ const {
   new URL("../src/data/mockSimulation.ts", import.meta.url),
 );
 const { residentSignals } = await loadTypeScript(
-  new URL("../src/components/avon/mapModel.ts", import.meta.url),
+  new URL("../src/components/campus/mapModel.ts", import.meta.url),
 );
-const { residentPosition, syntheticLayoutLinks } = await loadTypeScript(
-  new URL("../src/lib/networkLayout.ts", import.meta.url),
+const { mockForwardingLinks } = await loadTypeScript(
+  new URL("../src/data/mockTopology.ts", import.meta.url),
 );
 
 // Allow a full population run at the configured batch size, including delayed warnings.
@@ -56,7 +56,7 @@ test("suspicious demo reaches all 5000 via causal mock forwards, then finishes d
   assert.equal(data.messages.length, 0);
   const initial = JSON.stringify(data);
   const links = new Set(
-    syntheticLayoutLinks(data.residents.map((r) => residentPosition(r.id))).map(
+    mockForwardingLinks(data.residents.map((r) => r.id)).map(
       ({ sourceId, targetId }) => [sourceId, targetId].sort().join(":"),
     ),
   );
@@ -203,7 +203,7 @@ test("acknowledgment survives ticks; completion, fixture loading and unmount sto
   assert.equal(h.adapter.getSnapshot().mockSimulation.status, "paused");
 });
 
-test("scripted investigation rings start, pause, complete, and reset without stopping spread", async () => {
+test("scripted investigation outlines start, pause, complete, and reset without stopping spread", async () => {
   const h = harness();
   await h.adapter.startMockSimulation("suspicious");
   h.tick(MOCK_INVESTIGATION_START_TICK - 1);

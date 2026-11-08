@@ -1,4 +1,4 @@
-import { DbConnection } from '../module_bindings';
+import { DbConnection } from "../module_bindings";
 import type {
   ClusterMeta,
   ConnectionStatus,
@@ -8,28 +8,21 @@ import type {
   LiveNotification,
   Resident,
   Snapshot,
-} from './contracts';
+} from "./contracts";
 
-// Tables not built in Spacetime yet: stable empty arrays keep snapshot references steady.
-const NO_CAMPAIGNS: Snapshot['campaigns'] = [];
-const NO_MESSAGES: Snapshot['messages'] = [];
-const NO_WARNINGS: Snapshot['warnings'] = [];
-const NOT_AVAILABLE = 'Not available yet in live mode.';
+// Mock-shaped records remain separate from the live resident flags and incident/notification feed.
+const NO_CAMPAIGNS: Snapshot["campaigns"] = [];
+const NO_MESSAGES: Snapshot["messages"] = [];
+const NO_WARNINGS: Snapshot["warnings"] = [];
+const NOT_AVAILABLE = "Not available yet in live mode.";
 
 // Residents + the notification/incident feed. The `message` table (scam text) is not subscribed.
 const QUERIES = [
-  'SELECT * FROM resident',
-  'SELECT * FROM resident_profile',
-  'SELECT * FROM notification',
-  'SELECT * FROM incident',
+  "SELECT * FROM resident",
+  "SELECT * FROM resident_profile",
+  "SELECT * FROM notification",
+  "SELECT * FROM incident",
 ];
-
-const EMPTY_FEED: LiveFeed = {
-  notifications: [],
-  alertCount: 0,
-  recoveryCount: 0,
-  incidents: [],
-};
 
 /** Spacetime Timestamp -> epoch milliseconds. */
 function toMs(ts: { microsSinceUnixEpoch: bigint }) {
@@ -50,7 +43,7 @@ export interface SpacetimeAdapterOptions {
   db: string;
 }
 
-/** Live DataAdapter backed by SpacetimeDB subscriptions to resident + resident_profile. */
+/** Subscribes to synthetic residents, profiles, notifications, and investigation reports. */
 export function createSpacetimeAdapter({
   uri,
   db,
@@ -61,8 +54,7 @@ export function createSpacetimeAdapter({
     campaigns: NO_CAMPAIGNS,
     messages: NO_MESSAGES,
     warnings: NO_WARNINGS,
-    connection: { state: 'connecting' },
-    liveFeed: EMPTY_FEED,
+    connection: { state: "connecting" },
   };
 
   /** Replaces the cached snapshot, then notifies subscribers (same pattern as the mock). */
@@ -74,7 +66,7 @@ export function createSpacetimeAdapter({
     publish({ ...snapshot, connection });
 
   const adapter: DataAdapter = {
-    mode: 'live',
+    mode: "live",
     getSnapshot: () => snapshot,
     subscribe(listener) {
       listeners.add(listener);
@@ -91,8 +83,8 @@ export function createSpacetimeAdapter({
     snapshot = {
       ...snapshot,
       connection: {
-        state: 'error',
-        message: 'VITE_SPACETIME_URI is not set (see frontend/.env.example).',
+        state: "error",
+        message: "VITE_SPACETIME_URI is not set (see frontend/.env.example).",
       },
     };
     return adapter;
@@ -116,6 +108,7 @@ export function createSpacetimeAdapter({
         isSimulated: true,
         displayName: p?.name ?? `Resident ${r.id}`,
         profile: p?.profile,
+        liveState: { exposed: r.exposed, warned: r.warned },
       });
     }
     residents.sort((a, b) => Number(a.id) - Number(b.id));
@@ -131,8 +124,8 @@ export function createSpacetimeAdapter({
       a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
     );
     for (const n of rows) {
-      const kind = n.kind === 'recovery' ? 'recovery' : 'alert';
-      if (kind === 'recovery') recoveryCount++;
+      const kind = n.kind === "recovery" ? "recovery" : "alert";
+      if (kind === "recovery") recoveryCount++;
       else alertCount++;
       notifications.push({
         id: String(n.id),
@@ -144,7 +137,7 @@ export function createSpacetimeAdapter({
     const incidents: LiveIncident[] = [...c.db.incident.iter()]
       .map((i) => ({
         campaignId: i.campaignId,
-        status: i.status as LiveIncident['status'],
+        status: i.status as LiveIncident["status"],
         isCoordinated: i.isCoordinated,
         confidence: i.confidence,
         reasoning: i.reasoning,
@@ -180,7 +173,7 @@ export function createSpacetimeAdapter({
 
   function subscribeTables(c: DbConnection) {
     applied = false;
-    setConnection({ state: 'syncing' });
+    setConnection({ state: "syncing" });
     c.subscriptionBuilder()
       .onApplied(() => {
         applied = true;
@@ -188,13 +181,13 @@ export function createSpacetimeAdapter({
           ...snapshot,
           residents: buildResidents(c),
           liveFeed: buildFeed(c),
-          connection: { state: 'live' },
+          connection: { state: "live" },
         });
       })
       .onError((ctx) =>
         setConnection({
-          state: 'error',
-          message: `Subscription failed: ${ctx.event?.message ?? 'unknown error'}`,
+          state: "error",
+          message: `Subscription failed: ${ctx.event?.message ?? "unknown error"}`,
         }),
       )
       .subscribe(QUERIES);
@@ -209,6 +202,7 @@ export function createSpacetimeAdapter({
     c.db.residentProfile.onUpdate(scheduleRebuild);
     c.db.residentProfile.onDelete(scheduleRebuild);
     c.db.notification.onInsert(scheduleRebuild);
+    c.db.notification.onUpdate(scheduleRebuild);
     c.db.notification.onDelete(scheduleRebuild);
     c.db.incident.onInsert(scheduleRebuild);
     c.db.incident.onUpdate(scheduleRebuild);
@@ -227,15 +221,15 @@ export function createSpacetimeAdapter({
       .onAutomaticReconnect((c) => subscribeTables(c))
       .onConnectError((_ctx, error, nextAttempt) =>
         setConnection({
-          state: nextAttempt ? 'reconnecting' : 'error',
+          state: nextAttempt ? "reconnecting" : "error",
           message: `Can't connect to ${uri} (${db}): ${error.message}`,
         }),
       )
       .onDisconnect((_ctx, error, nextAttempt) => {
         applied = false;
         setConnection({
-          state: nextAttempt ? 'reconnecting' : 'error',
-          message: `Disconnected from ${db}${error ? `: ${error.message}` : ''}`,
+          state: nextAttempt ? "reconnecting" : "error",
+          message: `Disconnected from ${db}${error ? `: ${error.message}` : ""}`,
         });
       })
       .build();
@@ -243,7 +237,7 @@ export function createSpacetimeAdapter({
     snapshot = {
       ...snapshot,
       connection: {
-        state: 'error',
+        state: "error",
         message: failure instanceof Error ? failure.message : String(failure),
       },
     };

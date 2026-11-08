@@ -1,19 +1,16 @@
 import { MockSimulationControls } from "./components/MockSimulationControls";
 import { CommandCenter } from "./views/CommandCenter";
-import { ResidentPhone } from "./views/ResidentPhone";
-import { AttackerConsole } from "./views/AttackerConsole";
 import { useState, useSyncExternalStore } from "react";
 import { dataAdapter } from "./data";
 import type { ConnectionStatus, DataAdapter, Scenario } from "./data/contracts";
 
-const views = ["Command Center", "Resident Phone", "Attacker Console"] as const;
 /** Human-readable live connection state for the banner. */
 function connectionLabel(state?: ConnectionStatus["state"]) {
   switch (state) {
     case "connecting":
       return "Connecting…";
     case "syncing":
-      return "Syncing residents…";
+      return "Syncing live data…";
     case "live":
       return "Live";
     case "reconnecting":
@@ -25,12 +22,9 @@ function connectionLabel(state?: ConnectionStatus["state"]) {
   }
 }
 
-type View = (typeof views)[number];
-
-/** Connects adapter updates to the views and preserves selections across navigation. */
+/** Connects adapter updates to the dashboard and keeps the selected resident in sync. */
 export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
   const data = useSyncExternalStore(adapter.subscribe, adapter.getSnapshot);
-  const [view, setView] = useState<View>("Command Center");
   const [residentId, setResidentId] = useState("r1");
   const [scenario, setScenario] = useState<Scenario>("suspicious");
   const [busy, setBusy] = useState(false);
@@ -63,33 +57,15 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
           <span className="text-xl font-bold tracking-tight">
             Patient<span className="text-primary">Zero</span>
           </span>
-          <nav aria-label="Main views" className="flex flex-wrap gap-5">
-            {views.map((item) => (
-              <button
-                key={item}
-                aria-current={view === item ? "page" : undefined}
-                className="nav-button"
-                onClick={() => setView(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </nav>
-          <span className="eyebrow ml-auto">Avon · synthetic simulation</span>
+          <span className="eyebrow ml-auto">UT Dallas</span>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="eyebrow mb-2">
-              {view === "Command Center"
-                ? "Operations"
-                : view === "Resident Phone"
-                  ? "Resident view"
-                  : "Red team · simulation only"}
-            </p>
-            <h1>{view}</h1>
+            <p className="eyebrow mb-2">Operations</p>
+            <h1>Command Center</h1>
           </div>
           <span className="badge border-dashed">
             {adapter.mode === "mock"
@@ -108,8 +84,8 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
         )}
         {adapter.mode === "live" && (
           <aside className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted">
-            Residents stream live from SpacetimeDB. Campaigns, messages, and
-            warnings are not wired to backend tables yet, so they stay empty.
+            Resident states, notifications, and Nemotron investigation reports
+            stream from SpacetimeDB. Message contents are not subscribed.
             Scenario loading, reset, and warning acknowledgment are not
             available in live mode yet.
           </aside>
@@ -121,6 +97,8 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
             className="rounded border border-danger/50 bg-danger/10 p-3 text-danger"
           >
             {data.connection.message ?? "Connection problem."}
+            {data.liveFeed &&
+              " Displayed records are the last synchronized snapshot and may be stale."}
             {data.connection.state === "reconnecting" && " Retrying…"}
           </p>
         )}
@@ -136,85 +114,43 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
           {notice}
         </p>
 
-        {adapter.mode === "mock" &&
-          adapter.startMockSimulation &&
-          view !== "Resident Phone" && (
-            <MockSimulationControls
-              data={data}
-              scenario={scenario}
-              setScenario={setScenario}
-              busy={busy}
-              onStart={() =>
-                void perform(async () => {
-                  await adapter.startMockSimulation!(scenario);
-                  setView("Command Center");
-                }, "Timed mock simulation started.")
-              }
-              onPause={() =>
-                void perform(
-                  () => adapter.pauseMockSimulation!(),
-                  "Mock simulation paused.",
-                )
-              }
-              onResume={() =>
-                void perform(
-                  () => adapter.resumeMockSimulation!(),
-                  "Mock simulation resumed.",
-                )
-              }
-              onReset={() =>
-                void perform(
-                  () => adapter.reset(),
-                  "Timed mock simulation reset; residents retained.",
-                )
-              }
-            />
-          )}
-        {view === "Command Center" && (
-          <CommandCenter
+        {adapter.mode === "mock" && adapter.startMockSimulation && (
+          <MockSimulationControls
             data={data}
-            selectedId={residentId}
-            onSelect={setResidentId}
-            onOpenPhone={(id) => {
-              setResidentId(id);
-              setView("Resident Phone");
-            }}
-          />
-        )}
-        {view === "Resident Phone" && (
-          <ResidentPhone
-            data={data}
-            residentId={residentId}
-            setResidentId={setResidentId}
-            busy={busy}
-            onAcknowledge={(warningId) =>
-              void perform(
-                () => adapter.acknowledgeWarning(warningId),
-                "Warning acknowledged in this local mock session.",
-              )
-            }
-          />
-        )}
-        {view === "Attacker Console" && (
-          <AttackerConsole
-            campaigns={data.campaigns}
             scenario={scenario}
             setScenario={setScenario}
             busy={busy}
-            onLoadScenario={() =>
+            onStart={() =>
               void perform(
-                () => adapter.loadScenario(scenario),
-                "Mock scenario loaded. Open Command Center or Resident Phone to inspect it.",
+                () => adapter.startMockSimulation!(scenario),
+                "Timed mock simulation started.",
+              )
+            }
+            onPause={() =>
+              void perform(
+                () => adapter.pauseMockSimulation!(),
+                "Mock simulation paused.",
+              )
+            }
+            onResume={() =>
+              void perform(
+                () => adapter.resumeMockSimulation!(),
+                "Mock simulation resumed.",
               )
             }
             onReset={() =>
               void perform(
                 () => adapter.reset(),
-                "Local mock session reset; residents retained.",
+                "Timed mock simulation reset; residents retained.",
               )
             }
           />
         )}
+        <CommandCenter
+          data={data}
+          selectedId={residentId}
+          onSelect={setResidentId}
+        />
       </main>
     </div>
   );

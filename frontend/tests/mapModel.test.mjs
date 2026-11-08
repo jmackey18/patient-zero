@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { loadTypeScript } from "./loadTypeScript.mjs";
 
-const { residentSignals, constellationNodes } = await loadTypeScript(
-  new URL("../src/components/avon/mapModel.ts", import.meta.url),
-);
-const { residentPosition, syntheticLayoutLinks } = await loadTypeScript(
-  new URL("../src/lib/networkLayout.ts", import.meta.url),
+const { residentSignals, residentMapStates } = await loadTypeScript(
+  new URL("../src/components/campus/mapModel.ts", import.meta.url),
 );
 const resident = {
   id: "r1",
@@ -15,59 +11,7 @@ const resident = {
   persona: "Student",
   isSimulated: true,
 };
-const { insideTexas } = await loadTypeScript(
-  new URL("../src/lib/texasLayout.ts", import.meta.url),
-);
-
-test("all 5000 residents form one connected network without mutating input", async () => {
-  const raw = JSON.parse(
-    await readFile(
-      new URL("../../simulation/data/residents.json", import.meta.url),
-      "utf8",
-    ),
-  );
-  const residents = raw.map((row) => ({
-    ...resident,
-    id: String(row.id),
-    profile: { district: row.district, x: row.x, y: row.y },
-  }));
-  const data = {
-    residents,
-    messages: [],
-    campaigns: [],
-    warnings: [],
-    connection: { state: "live" },
-  };
-  const before = JSON.stringify(data);
-  const nodes = constellationNodes(data);
-  assert.equal(nodes.length, 5000);
-  assert.equal(new Set(nodes.map((node) => node.id)).size, 5000);
-  assert.ok(nodes.every((node) => node.status === "unavailable"));
-  assertConnectedLayout(nodes);
-  assert.equal(JSON.stringify(data), before);
-  assert.equal(
-    new Set(nodes.map(({ x, y, z }) => JSON.stringify([x, y, z]))).size,
-    5000,
-  );
-  for (const node of nodes) {
-    assert.ok([node.x, node.y, node.z].every(Number.isFinite));
-    assert.ok(insideTexas(node.x, node.y));
-    assert.ok(node.z >= 5 && node.z < 16);
-  }
-  assert.ok(new Set(nodes.map((node) => Math.floor(node.z))).size >= 10);
-  assert.ok(
-    Math.max(...nodes.map((node) => node.x)) -
-      Math.min(...nodes.map((node) => node.x)) >
-      45,
-  );
-  assert.ok(
-    Math.max(...nodes.map((node) => node.y)) -
-      Math.min(...nodes.map((node) => node.y)) >
-      42,
-  );
-});
-
-test("districts, coordinates, and susceptibility have no influence on positions or links", () => {
+test("resident display states ignore profile coordinates and susceptibility", () => {
   const residents = Array.from({ length: 400 }, (_, i) => ({
     ...resident,
     id: `r${i}`,
@@ -79,8 +23,8 @@ test("districts, coordinates, and susceptibility have no influence on positions 
     },
   }));
   const data = { residents, messages: [], campaigns: [], warnings: [] };
-  const original = constellationNodes(data);
-  const reassigned = constellationNodes({
+  const original = residentMapStates(data);
+  const reassigned = residentMapStates({
     ...data,
     residents: residents.map((item) => ({
       ...item,
@@ -92,26 +36,18 @@ test("districts, coordinates, and susceptibility have no influence on positions 
       },
     })),
   });
-  const noProfiles = constellationNodes({
+  const noProfiles = residentMapStates({
     ...data,
     residents: residents.map(({ profile, ...item }) => item),
   });
   assert.deepEqual(original, reassigned);
   assert.deepEqual(original, noProfiles);
   assert.deepEqual(
-    syntheticLayoutLinks(original),
-    syntheticLayoutLinks(reassigned),
-  );
-  assert.deepEqual(
-    constellationNodes({
+    residentMapStates({
       ...data,
       residents: [...residents].reverse(),
     }).reverse(),
     original,
-  );
-  assert.deepEqual(
-    residentPosition("r201"),
-    original.map(({ id, x, y, z }) => ({ id, x, y, z }))[201],
   );
 });
 
@@ -176,13 +112,13 @@ test("empty live feeds stay unknown and orphan records cannot create resident no
     warnings: [{ recipientId: "missing", acknowledged: true }],
     campaigns: [{ clusterId: "cluster1", detectionStatus: "flagged" }],
   });
-  const nodes = constellationNodes(data);
+  const nodes = residentMapStates(data);
   assert.equal(nodes.length, 2);
   assert.ok(
     nodes.every((node) => node.status === "unavailable" && !node.warningCount),
   );
   assert.equal(
-    constellationNodes({
+    residentMapStates({
       residents: [],
       messages: [],
       campaigns: [],
@@ -192,21 +128,21 @@ test("empty live feeds stay unknown and orphan records cannot create resident no
   );
 });
 
-test("state updates preserve all dot positions and reset clears previous warning/flag records", () => {
+test("reset preserves resident IDs and clears previous warning/flag records", () => {
   const data = snapshot({
     campaigns: [{ clusterId: "cluster1", detectionStatus: "flagged" }],
     warnings: [{ recipientId: "r1", acknowledged: false }],
   });
-  const flagged = constellationNodes(data);
-  const reset = constellationNodes({
+  const flagged = residentMapStates(data);
+  const reset = residentMapStates({
     ...data,
     messages: [],
     campaigns: [],
     warnings: [],
   });
   assert.deepEqual(
-    flagged.map(({ id, x, y, z }) => ({ id, x, y, z })),
-    reset.map(({ id, x, y, z }) => ({ id, x, y, z })),
+    flagged.map(({ id }) => id),
+    reset.map(({ id }) => id),
   );
   assert.ok(
     reset.every(
@@ -215,55 +151,7 @@ test("state updates preserve all dot positions and reset clears previous warning
   );
 });
 
-/** Verifies the internal mock topology is a tree with real node endpoints and no isolated residents. */
-function assertConnectedLayout(nodes) {
-  const links = syntheticLayoutLinks(nodes);
-  assert.equal(links.length, Math.max(0, nodes.length - 1));
-  const adjacency = new Map(nodes.map((node) => [node.id, []]));
-  const pairs = new Set();
-  for (const link of links) {
-    assert.ok(adjacency.has(link.sourceId) && adjacency.has(link.targetId));
-    assert.notEqual(link.sourceId, link.targetId);
-    const pair = [link.sourceId, link.targetId].sort().join(":");
-    assert.ok(!pairs.has(pair));
-    pairs.add(pair);
-    adjacency.get(link.sourceId).push(link.targetId);
-    adjacency.get(link.targetId).push(link.sourceId);
-  }
-  const seen = new Set();
-  const pending = nodes.length ? [nodes[0].id] : [];
-  while (pending.length) {
-    const id = pending.pop();
-    if (seen.has(id)) continue;
-    seen.add(id);
-    pending.push(
-      ...adjacency.get(id).filter((neighbor) => !seen.has(neighbor)),
-    );
-  }
-  assert.equal(seen.size, nodes.length);
-  assert.deepEqual(syntheticLayoutLinks([...nodes].reverse()), links);
-}
-
-test("synthetic layout stays connected for empty, single, and coincident inputs", () => {
-  assertConnectedLayout([]);
-  assertConnectedLayout([{ id: "only", x: 0, y: 0, z: 0 }]);
-  const nodes = Array.from({ length: 60 }, (_, i) => ({
-    id: `node${i}`,
-    x: i % 5,
-    y: i % 7,
-    z: i % 2,
-  }));
-  assertConnectedLayout(nodes);
-  assertConnectedLayout(nodes.map((node) => ({ ...node, x: 0, y: 0, z: 0 })));
-  assert.deepEqual(
-    syntheticLayoutLinks(nodes),
-    syntheticLayoutLinks(
-      nodes.map((node) => ({ ...node, status: "flagged", warningCount: 5 })),
-    ),
-  );
-});
-
-test("blue mock rings follow campaign membership and stay separate from exposure and warnings", () => {
+test("blue mock outlines follow campaign membership and stay separate from exposure and warnings", () => {
   const data = snapshot({
     mockSimulation: { status: "paused" },
     campaigns: [
@@ -309,4 +197,97 @@ test("blue mock rings follow campaign membership and stay separate from exposure
     residentSignals({ ...data, messages: [] }).get("r1").investigating,
     false,
   );
+});
+
+test("live flags drive colors independently from notifications and AI assessments", () => {
+  const data = snapshot({
+    connection: { state: "live" },
+    residents: [
+      {
+        ...resident,
+        id: "exposed",
+        liveState: { exposed: true, warned: true },
+      },
+      {
+        ...resident,
+        id: "warned",
+        liveState: { exposed: false, warned: true },
+      },
+      {
+        ...resident,
+        id: "untouched",
+        liveState: { exposed: false, warned: false },
+      },
+      { ...resident, id: "unknown" },
+    ],
+    liveFeed: {
+      notifications: [
+        { id: "1", recipientId: "exposed", kind: "recovery" },
+        { id: "2", recipientId: "warned", kind: "alert" },
+        { id: "3", recipientId: "missing", kind: "alert" },
+      ],
+      incidents: [{ campaignId: "c1", status: "investigating" }],
+    },
+  });
+  const before = JSON.stringify(data);
+  const nodes = residentMapStates(data);
+  assert.deepEqual(
+    nodes.map((n) => n.status),
+    ["exposed", "warned", "untouched", "unavailable"],
+  );
+  assert.deepEqual(
+    nodes.map((n) => n.warningCount),
+    [1, 1, 0, 0],
+  );
+  assert.ok(
+    nodes.every(
+      (n) => !n.investigating && n.messageCount === 0 && n.flaggedCount === 0,
+    ),
+  );
+  for (const status of ["complete", "failed"]) {
+    assert.deepEqual(
+      residentMapStates({
+        ...data,
+        liveFeed: {
+          ...data.liveFeed,
+          incidents: [{ campaignId: "c1", status }],
+        },
+      }),
+      nodes,
+    );
+  }
+  const cleared = residentMapStates({
+    ...data,
+    residents: data.residents.map((r) => ({
+      ...r,
+      liveState: { exposed: false, warned: false },
+    })),
+    liveFeed: { notifications: [], incidents: [] },
+  });
+  assert.ok(
+    cleared.every((n) => n.status === "untouched" && n.warningCount === 0),
+  );
+  assert.deepEqual(
+    nodes.map(({ id }) => id),
+    cleared.map(({ id }) => id),
+  );
+  assert.equal(JSON.stringify(data), before);
+});
+
+test("5000 live residents retain distinct exposed and warned counts on updates", () => {
+  const data = snapshot({
+    connection: { state: "live" },
+    residents: Array.from({ length: 5000 }, (_, id) => ({
+      ...resident,
+      id: String(id),
+      liveState: { exposed: id < 6, warned: id >= 6 },
+    })),
+    messages: [],
+    campaigns: [],
+    warnings: [],
+  });
+  const nodes = residentMapStates(data);
+  assert.equal(nodes.filter((n) => n.status === "exposed").length, 6);
+  assert.equal(nodes.filter((n) => n.status === "warned").length, 4994);
+  assert.ok(nodes.every((n) => n.warningCount === 0));
 });

@@ -19,6 +19,7 @@ export const Incident = __t.object("Incident", {
   warningText: __t.string(),
   numVariants: __t.u32(),
   clusterMeta: __t.string(),
+  timeSpreadS: __t.f32(),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
 });

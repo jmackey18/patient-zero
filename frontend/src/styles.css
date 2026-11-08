@@ -61,19 +61,7 @@
   .badge {
     @apply inline-block rounded border border-warning/50 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-warning;
   }
-  .nav-button {
-    @apply rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 font-mono text-[11px] uppercase tracking-wide text-muted hover:text-foreground;
-  }
-  .nav-button[aria-current="page"] {
-    @apply border-primary text-primary;
-  }
   .warning-card {
     @apply rounded-xl border border-warning/40 bg-warning/10 p-4;
-  }
-  .phone {
-    @apply mx-auto w-full max-w-sm space-y-5 rounded-[2.5rem] border-[9px] border-border bg-background p-4 shadow-2xl;
-  }
-  .danger-button {
-    @apply border-danger/50 bg-danger/15 text-danger hover:border-danger;
   }
 }
