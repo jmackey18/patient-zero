@@ -24,14 +24,11 @@ while True:
             campaign_id = rows[0]["campaign_id"].strip('"')
             if campaign_id not in flagged_campaigns:
                 flagged_campaigns.add(campaign_id)
-
                 print(f"\n🚨 CAMPAIGN DETECTED")
                 print(f"   {len(result['infected'])} exposed, {result['protected_count']} protected")
                 print(f"   {result['num_clusters']} fingerprint clusters (rephrasing variants)")
-
                 call_reducer("flag_campaign", [])
                 print("   ✅ Residents protected")
-
                 print("   🔍 Analyzing behavioral signatures...")
                 verdict = investigate(result["cluster_meta"], result["velocity"], result["recipient_count"])
                 print(f"\n   ── INCIDENT REPORT ──")

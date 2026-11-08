@@ -1,46 +1,62 @@
 from detection.simhash import simhash, hamming
 
-# --- tunable thresholds (keep these consistent across the team) ---
-HAMMING_THRESHOLD = 22      # texts within this distance = same campaign
-VELOCITY_THRESHOLD = 4      # min cluster size to flag
-RECIPIENT_THRESHOLD = 3     # min distinct recipients
-WINDOW_SECONDS = 10         # sliding time window
+HAMMING_THRESHOLD = 22
+VELOCITY_THRESHOLD = 4
+RECIPIENT_THRESHOLD = 3
+WINDOW_SECONDS = 10
+
+def _cluster_messages(messages):
+    clusters = []
+    for m in messages:
+        placed = False
+        for c in clusters:
+            if hamming(m["simhash"], c["seed_hash"]) <= HAMMING_THRESHOLD:
+                c["messages"].append(m)
+                placed = True
+                break
+        if not placed:
+            clusters.append({"seed_hash": m["simhash"], "messages": [m]})
+    return clusters
 
 def detect(messages, now, total_residents):
-    """
-    messages: list of {sender_id, sender_known, recipient_id, text, simhash, timestamp}
-    now: current timestamp
-    total_residents: total count (for protected calc)
-    Returns DetectionResult dict.
-    """
     recent = [m for m in messages if now - m["timestamp"] < WINDOW_SECONDS]
     if not recent:
         return {"flagged": False}
 
-    # cluster messages similar to the first recent one
-    seed = recent[0]["simhash"]
-    cluster = [m for m in recent if hamming(m["simhash"], seed) <= HAMMING_THRESHOLD]
+    clusters = _cluster_messages(recent)
 
-    velocity = len(cluster)
-    recipients = set(m["recipient_id"] for m in cluster)
-    sender_unknown = all(not m["sender_known"] for m in cluster)
+    cluster_meta = []
+    for c in clusters:
+        msgs = c["messages"]
+        recipients = set(m["recipient_id"] for m in msgs)
+        times = [m["timestamp"] for m in msgs]
+        cluster_meta.append({
+            "size": len(msgs),
+            "distinct_recipients": len(recipients),
+            "sender_unknown": all(not m["sender_known"] for m in msgs),
+            "time_spread_s": round(max(times) - min(times), 2),
+            "fingerprint": msgs[0]["simhash"],
+        })
 
-    flagged = (
-        velocity >= VELOCITY_THRESHOLD
-        and len(recipients) >= RECIPIENT_THRESHOLD
-        and sender_unknown
-    )
+    suspicious = [c for c in cluster_meta if c["sender_unknown"]]
+    total_msgs = sum(c["size"] for c in suspicious)
+    all_recipients = set()
+    for c in clusters:
+        if all(not m["sender_known"] for m in c["messages"]):
+            all_recipients.update(m["recipient_id"] for m in c["messages"])
 
+    flagged = total_msgs >= VELOCITY_THRESHOLD and len(all_recipients) >= RECIPIENT_THRESHOLD
     if not flagged:
         return {"flagged": False}
 
-    infected = list(recipients)
     return {
         "flagged": True,
         "msgs_before_detection": len(messages),
-        "infected": infected,
-        "protected_count": total_residents - len(infected),
-        "sample_text": cluster[0]["text"],   # passed to Nemotron next
-        "velocity": velocity,
-        "recipient_count": len(recipients),
+        "infected": list(all_recipients),
+        "protected_count": total_residents - len(all_recipients),
+        "num_clusters": len(suspicious),
+        "cluster_meta": suspicious,
+        "velocity": total_msgs,
+        "recipient_count": len(all_recipients),
+        "sample_text": clusters[0]["messages"][0]["text"],
     }
