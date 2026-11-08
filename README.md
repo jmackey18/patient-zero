@@ -39,6 +39,23 @@ npm run generate                                  # regenerate bindings after an
 node test_client.js YourName                      # prints PASS when the live insert arrives
 ```
 
+## Deploy (Vultr)
+Code changes go through GitHub; the server only pulls and deploys. On the server:
+
+```
+bash scripts/deploy.sh                    # git pull + rebuild frontend into /var/www/app
+bash scripts/deploy.sh --backend          # also republish the Spacetime module
+bash scripts/deploy.sh --backend --seed   # also reseed the 5,000 residents
+```
+
+From your laptop, in one line:
+
+```
+ssh root@149.28.246.156 "bash /root/patient-zero/scripts/deploy.sh"
+```
+
+The frontend build needs `frontend/.env.production` (live mode, `wss://db.149-28-246-156.sslip.io`, `patient-zero-db`). Site: https://149-28-246-156.sslip.io
+
 ## Seed Avon residents (backend/ + simulation/)
 Gemini generated the personas once (`simulation/data/personas.json`, committed). Seeding is plain Python, no LLM.
 
