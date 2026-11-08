@@ -1,4 +1,5 @@
 import { MockSimulationControls } from "./components/MockSimulationControls";
+import { SimulatePanel } from "./components/live/SimulatePanel";
 import { CommandCenter } from "./views/CommandCenter";
 import { ResidentPhone } from "./views/ResidentPhone";
 import { AttackerConsole } from "./views/AttackerConsole";
@@ -108,10 +109,10 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
         )}
         {adapter.mode === "live" && (
           <aside className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted">
-            Residents stream live from SpacetimeDB. Campaigns, messages, and
-            warnings are not wired to backend tables yet, so they stay empty.
-            Scenario loading, reset, and warning acknowledgment are not
-            available in live mode yet.
+            Residents, notifications, and Nemotron incidents stream live from
+            SpacetimeDB. Use Simulate to launch a real attack through the
+            pipeline. The mock campaign, message, and warning panels below stay
+            empty in live mode.
           </aside>
         )}
         {(data.connection?.state === "error" ||
@@ -168,6 +169,15 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
                   "Timed mock simulation reset; residents retained.",
                 )
               }
+            />
+          )}
+        {adapter.mode === "live" &&
+          adapter.requestSimulation &&
+          view === "Command Center" && (
+            <SimulatePanel
+              data={data}
+              onSimulate={(id) => adapter.requestSimulation!(id)}
+              onReset={() => adapter.reset()}
             />
           )}
         {view === "Command Center" && (

@@ -45,6 +45,11 @@ def detect(messages, now, total_residents):
         if all(not m["sender_known"] for m in c["messages"]):
             all_recipients.update(m["recipient_id"] for m in c["messages"])
 
+    # Campaign-wide spread: first to last exposed message across all suspicious clusters.
+    suspicious_times = [m["timestamp"] for c in clusters
+                        if all(not m["sender_known"] for m in c["messages"]) for m in c["messages"]]
+    time_spread_s = round(max(suspicious_times) - min(suspicious_times), 2) if suspicious_times else 0.0
+
     flagged = total_msgs >= VELOCITY_THRESHOLD and len(all_recipients) >= RECIPIENT_THRESHOLD
     if not flagged:
         return {"flagged": False}
@@ -58,5 +63,6 @@ def detect(messages, now, total_residents):
         "cluster_meta": suspicious,
         "velocity": total_msgs,
         "recipient_count": len(all_recipients),
+        "time_spread_s": time_spread_s,
         "sample_text": clusters[0]["messages"][0]["text"],
     }
