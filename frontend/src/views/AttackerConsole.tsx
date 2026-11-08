@@ -23,9 +23,9 @@ export function AttackerConsole({
       <section className="panel space-y-5">
         <h2 className="text-danger">Load synthetic scenario</h2>
         <p className="muted">
-          Preview suspicious or benign traffic in the other views. These
-          controls load static fixtures; they do not generate, send, or detect
-          messages.
+          These small static fixtures remain available alongside the timed
+          simulation above. These controls load static fixtures; they do not
+          generate, send, or detect messages.
         </p>
         <label className="block">
           <span className="eyebrow">Mock scenario</span>

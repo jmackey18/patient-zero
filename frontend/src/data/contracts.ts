@@ -19,22 +19,22 @@ export interface ResidentProfile {
 
 /** Live-adapter connection state; absent in mock mode. */
 export interface ConnectionStatus {
-  state: 'connecting' | 'syncing' | 'live' | 'reconnecting' | 'error';
+  state: "connecting" | "syncing" | "live" | "reconnecting" | "error";
   message?: string;
 }
 
 export interface Campaign {
   clusterId: string;
   label: string;
-  detectionStatus: 'monitoring' | 'flagged';
-  investigationStatus: 'not_requested' | 'pending' | 'complete' | 'failed';
+  detectionStatus: "monitoring" | "flagged";
+  investigationStatus: "not_requested" | "pending" | "complete" | "failed";
 }
 
 export interface Warning {
   id: string;
   recipientId: string;
   clusterId: string;
-  severity: 'preliminary' | 'elevated';
+  severity: "preliminary" | "elevated";
   warningText: string;
   createdAt: number;
   acknowledged: boolean;
@@ -50,19 +50,40 @@ export interface SyntheticMessage {
   receivedAt: number;
 }
 
+/** Browser-local demo event, not a production ingestion or detection contract. */
+export interface MockPropagationEvent {
+  id: string;
+  sourceId: string | null;
+  recipientId: string;
+  messageId: string;
+  occurredAt: number;
+  tick: number;
+}
+
+export interface MockSimulationState {
+  status: "idle" | "running" | "paused" | "complete";
+  scenario: Scenario;
+  tick: number;
+  tickMs: number;
+  seedResidentId: string;
+}
+
 export interface Snapshot {
   residents: Resident[];
   campaigns: Campaign[];
   messages: SyntheticMessage[];
   warnings: Warning[];
   connection?: ConnectionStatus;
+  /** Present only for the browser-local timed demo; live adapters omit these fields. */
+  mockSimulation?: MockSimulationState;
+  mockPropagation?: MockPropagationEvent[];
 }
 
-export type Scenario = 'suspicious' | 'benign';
+export type Scenario = "suspicious" | "benign";
 
 /** Data access contract shared by the local mock and a future live backend adapter. */
 export interface DataAdapter {
-  readonly mode: 'mock' | 'live';
+  readonly mode: "mock" | "live";
   /** Returns a stable cached snapshot until an update, as required by useSyncExternalStore. */
   getSnapshot(): Snapshot;
   /** Registers a change listener and returns a function that removes it. */
@@ -73,4 +94,8 @@ export interface DataAdapter {
   loadScenario(scenario: Scenario): Promise<void>;
   /** Resets simulation state according to the adapter implementation. */
   reset(): Promise<void>;
+  /** Optional local-demo controls. Live adapters do not implement them. */
+  startMockSimulation?(scenario: Scenario): Promise<void>;
+  pauseMockSimulation?(): Promise<void>;
+  resumeMockSimulation?(): Promise<void>;
 }
