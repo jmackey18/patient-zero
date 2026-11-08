@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PhoneFrame } from "../PhoneFrame";
 import { EXPOSURE_LABELS, type ResidentMapState } from "./mapModel";
 
 interface Props {
@@ -41,12 +42,7 @@ export function ResidentPhoneOverlay({
       inert={!resident}
       className={`resident-phone ${!resident ? "resident-phone--closing" : ""}`}
     >
-      <div className="resident-phone__screen">
-        <div className="resident-phone__notch" aria-hidden="true" />
-        <div className="resident-phone__topline" aria-hidden="true">
-          <span>Mobile</span>
-          <span>▰</span>
-        </div>
+      <PhoneFrame>
         <button
           className="resident-phone__close"
           onClick={onClose}
@@ -76,8 +72,7 @@ export function ResidentPhoneOverlay({
             )}
           </div>
         </div>
-        <div className="resident-phone__home" aria-hidden="true" />
-      </div>
+      </PhoneFrame>
     </aside>
   );
 }
