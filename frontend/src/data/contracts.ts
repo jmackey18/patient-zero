@@ -4,6 +4,8 @@ export interface Resident {
   persona: string;
   isSimulated: boolean;
   displayName: string;
+  /** Backend simulation flags; absent in mock fixtures or older live adapters. */
+  liveState?: { exposed: boolean; warned: boolean };
   /** Map/profile details; present in live mode (from resident_profile), absent in mock fixtures. */
   profile?: ResidentProfile;
 }
@@ -119,20 +121,11 @@ export interface SimRun {
   createdAt: number;
 }
 
-/** Spacetime `pipeline_log` row: one terminal line from the attacker or detector. */
-export interface PipelineLogLine {
-  id: string;
-  source: "attacker" | "detector";
-  line: string;
-  at: number;
-}
-
 /** Live notification + Nemotron feed. Present only in live mode (`VITE_DATA_MODE=live`). */
 export interface LiveFeed {
-  /** Simulate-button scenarios, runs (newest first) and terminal output (oldest first). */
+  /** Simulate-button scenarios and the latest run. */
   scenarios: SimScenario[];
   latestRun?: SimRun;
-  logs: PipelineLogLine[];
   /** All notification rows, oldest first. */
   notifications: LiveNotification[];
   alertCount: number;
@@ -152,13 +145,13 @@ export interface Snapshot {
   /** Present only for the browser-local timed demo; live adapters omit these fields. */
   mockSimulation?: MockSimulationState;
   mockPropagation?: MockPropagationEvent[];
-  /** Live mode only: notification + Nemotron incident feed from SpacetimeDB. */
+  /** Published after the live subscription syncs; retained as stale data during reconnection. */
   liveFeed?: LiveFeed;
 }
 
 export type Scenario = "suspicious" | "benign";
 
-/** Data access contract shared by the local mock and a future live backend adapter. */
+/** Data access contract shared by the browser-local mock and live backend adapter. */
 export interface DataAdapter {
   readonly mode: "mock" | "live";
   /** Returns a stable cached snapshot until an update, as required by useSyncExternalStore. */

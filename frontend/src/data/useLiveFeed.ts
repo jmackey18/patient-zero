@@ -1,8 +1,7 @@
-import type { LiveFeed, LiveNotification, Snapshot } from "./contracts";
+import type { LiveFeed, Snapshot } from "./contracts";
 
 const EMPTY: LiveFeed = {
   scenarios: [],
-  logs: [],
   notifications: [],
   alertCount: 0,
   recoveryCount: 0,
@@ -17,7 +16,6 @@ const EMPTY: LiveFeed = {
  *   feed.latestIncident?.confidence    // 0-100
  *   feed.latestIncident?.reasoning     // Nemotron's explanation
  *   feed.alertCount, feed.recoveryCount
- *   feed.notificationsFor("123")       // one resident's alerts/recovery steps
  *
  * In mock mode (no SpacetimeDB) everything is empty, so components can render unconditionally.
  */
@@ -26,8 +24,5 @@ export function useLiveFeed(data: Snapshot) {
   return {
     ...feed,
     available: !!data.liveFeed,
-    notificationsFor(residentId: string): LiveNotification[] {
-      return feed.notifications.filter((n) => n.recipientId === residentId);
-    },
   };
 }
