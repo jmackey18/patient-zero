@@ -3,9 +3,27 @@ import { ResidentPhone } from "./views/ResidentPhone";
 import { AttackerConsole } from "./views/AttackerConsole";
 import { useState, useSyncExternalStore } from "react";
 import { dataAdapter } from "./data";
-import type { DataAdapter, Scenario } from "./data/contracts";
+import type { ConnectionStatus, DataAdapter, Scenario } from "./data/contracts";
 
 const views = ["Command Center", "Resident Phone", "Attacker Console"] as const;
+/** Human-readable live connection state for the banner. */
+function connectionLabel(state?: ConnectionStatus["state"]) {
+  switch (state) {
+    case "connecting":
+      return "Connecting…";
+    case "syncing":
+      return "Syncing residents…";
+    case "live":
+      return "Live";
+    case "reconnecting":
+      return "Reconnecting…";
+    case "error":
+      return "Connection error";
+    default:
+      return "Unknown";
+  }
+}
+
 type View = (typeof views)[number];
 
 /** Connects adapter updates to the views and preserves selections across navigation. */
@@ -59,7 +77,7 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
           <span className="eyebrow ml-auto">Avon · synthetic simulation</span>
         </div>
       </header>
-      
+
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -73,7 +91,9 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
             <h1>{view}</h1>
           </div>
           <span className="badge border-dashed">
-            {adapter.mode === "mock" ? "Synthetic mock data" : "Connected data"}
+            {adapter.mode === "mock"
+              ? "Synthetic mock data"
+              : `SpacetimeDB · ${connectionLabel(data.connection?.state)}`}
           </span>
         </div>
         {adapter.mode === "mock" && (
@@ -83,6 +103,24 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
             SpacetimeDB connection, or Nemotron is running. Changes reset on
             reload and do not sync across browsers.
           </aside>
+        )}
+        {adapter.mode === "live" && (
+          <aside className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted">
+            Residents stream live from SpacetimeDB. Campaigns, messages, and
+            warnings are not wired to backend tables yet, so they stay empty.
+            Scenario loading, reset, and warning acknowledgment are not
+            available in live mode yet.
+          </aside>
+        )}
+        {(data.connection?.state === "error" ||
+          data.connection?.state === "reconnecting") && (
+          <p
+            role="alert"
+            className="rounded border border-danger/50 bg-danger/10 p-3 text-danger"
+          >
+            {data.connection.message ?? "Connection problem."}
+            {data.connection.state === "reconnecting" && " Retrying…"}
+          </p>
         )}
         {error && (
           <p

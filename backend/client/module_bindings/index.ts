@@ -35,12 +35,16 @@ import {
 
 // Import all reducer arg schemas
 import AddReducer from "./add_reducer.ts";
+import ClearResidentsReducer from "./clear_residents_reducer.ts";
 import SayHelloReducer from "./say_hello_reducer.ts";
+import SeedResidentsBatchReducer from "./seed_residents_batch_reducer.ts";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
 import PersonRow from "./person_table.ts";
+import ResidentRow from "./resident_table.ts";
+import ResidentProfileRow from "./resident_profile_table.ts";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -53,12 +57,36 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, PersonRow),
+  resident: __table({
+    name: 'resident',
+    indexes: [
+      { accessor: 'id', name: 'resident_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'resident_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ResidentRow),
+  residentProfile: __table({
+    name: 'resident_profile',
+    indexes: [
+      { accessor: 'resident_id', name: 'resident_profile_resident_id_idx_btree', algorithm: 'btree', columns: [
+        'residentId',
+      ] },
+    ],
+    constraints: [
+      { name: 'resident_profile_resident_id_key', constraint: 'unique', columns: ['residentId'] },
+    ],
+  }, ResidentProfileRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("add", AddReducer),
+  __reducerSchema("clear_residents", ClearResidentsReducer),
   __reducerSchema("say_hello", SayHelloReducer),
+  __reducerSchema("seed_residents_batch", SeedResidentsBatchReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
