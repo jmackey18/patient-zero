@@ -2,3 +2,4 @@ numpy
 openai
 python-dotenv
 google-genai
+google-genai

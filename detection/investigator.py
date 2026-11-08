@@ -1,27 +1,24 @@
 import os, json
 from openai import OpenAI
 from dotenv import load_dotenv
-from detection.url_check import extract_url, check_url
 
 load_dotenv()
 client = OpenAI(base_url="https://integrate.api.nvidia.com/v1",
                 api_key=os.getenv("NVIDIA_API_KEY"))
-MODEL = "nvidia/nemotron-3.5-bolt-e4b"   # your exact model
+MODEL = "nvidia/nemotron-3.5-bolt-e4b"
 
-def investigate(sample_text, velocity, recipient_count):
-    # STEP 1: extract + inspect the URL (the tool)
-    url = extract_url(sample_text)
-    url_findings = check_url(url) if url else {"note": "no URL found"}
+def investigate(cluster_meta, total_msgs, total_recipients):
+    prompt = f"""You are a telecom fraud analyst. Messages are end-to-end encrypted — you CANNOT read content, only behavioral metadata.
 
-    # STEP 2: give Nemotron the message + the tool's findings, let it reason
-    prompt = f"""You are a fraud investigation agent. Analyze this fast-spreading message using the URL inspection results.
+A burst was detected across {len(cluster_meta)} message clusters. Each cluster is near-identical messages grouped by privacy-preserving fingerprint. Different clusters have DIFFERENT fingerprints (different wording) but may be one coordinated campaign where an attacker rephrased to evade fingerprint detection.
 
-Message: "{sample_text}"
-Spread: {velocity} near-identical messages to {recipient_count} people in seconds.
-URL inspection tool results: {json.dumps(url_findings)}
+Cluster metadata:
+{json.dumps(cluster_meta, indent=2)}
 
-Reason over the URL evidence, then respond ONLY as JSON:
-{{"is_scam": true, "scam_type": "...", "confidence": 0-100, "evidence": "cite the specific URL findings that prove this", "warning_text": "short user warning naming the evidence", "recovery_steps": ["...","..."]}}"""
+Total: {total_msgs} messages to {total_recipients} distinct recipients.
+
+Reason over the BEHAVIORAL signals to decide if these clusters are one coordinated attack. Respond ONLY as JSON:
+{{"is_coordinated_attack": true, "confidence": 0-100, "reasoning": "cite behavioral signals linking the clusters despite different wording", "num_variants": {len(cluster_meta)}, "warning_text": "short carrier warning", "recovery_steps": ["...","..."]}}"""
 
     resp = client.chat.completions.create(
         model=MODEL,
@@ -30,14 +27,10 @@ Reason over the URL evidence, then respond ONLY as JSON:
     )
     raw = resp.choices[0].message.content
     try:
-        result = json.loads(raw)
+        return json.loads(raw)
     except json.JSONDecodeError:
-        result = {"is_scam": True, "scam_type": "unknown", "confidence": 50,
-                  "evidence": "", "warning_text": "Possible scam — do not click.",
-                  "recovery_steps": [], "raw": raw}
-    result["url_findings"] = url_findings   # attach raw tool output for the demo
-    return result
-
-if __name__ == "__main__":
-    print(json.dumps(investigate(
-        "your package is held pay fee usps-tracking.xyz/pay", 6, 6), indent=2))
+        return {"is_coordinated_attack": True, "confidence": 50,
+                "reasoning": "metadata indicates coordinated spread",
+                "num_variants": len(cluster_meta),
+                "warning_text": "Likely coordinated scam — do not engage.",
+                "recovery_steps": [], "raw": raw}

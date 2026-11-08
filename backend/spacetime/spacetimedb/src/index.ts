@@ -1,27 +1,31 @@
 import { schema, table, t } from 'spacetimedb/server';
 
-// --- Hello-world (kept until the real tables are proven) ---
 const person = table(
   { public: true },
+  { name: t.string() }
+);
+
+const notification = table(
+  { name: 'notification', public: true },
   {
-    name: t.string(),
+    id: t.u64().primaryKey().autoInc(),
+    recipient_id: t.u32(),
+    kind: t.string(),        // "recovery" or "alert"
+    text: t.string(),
   }
 );
 
-// --- Avon residents (MVP v2) ---
-// Locked shared schema: {id, persona, exposed, warned, opened}. Do not add fields here.
 const resident = table(
   { name: 'resident', public: true },
   {
     id: t.u32().primaryKey(),
-    persona: t.string(), // grandparent | student | small-biz
-    exposed: t.bool(),   // received the campaign message
-    warned: t.bool(),    // got a Scam Shield warning
-    opened: t.bool(),    // opened/tapped the scam
+    persona: t.string(),
+    exposed: t.bool(),
+    warned: t.bool(),
+    opened: t.bool(),
   }
 );
 
-// Extra per-person details for the map and spread logic, kept apart from the locked schema.
 const residentProfile = table(
   { name: 'resident_profile', public: true },
   {
@@ -29,18 +33,30 @@ const residentProfile = table(
     name: t.string(),
     age: t.u8(),
     district: t.string(),
-    x: t.f32(), // map position, 0..1
+    x: t.f32(),
     y: t.f32(),
-    weak_spot: t.string(),      // scam type they're most likely to fall for
-    susceptibility: t.f32(),    // 0..1
-    open_delay_s: t.u16(),      // seconds before they typically open a text
+    weak_spot: t.string(),
+    susceptibility: t.f32(),
+    open_delay_s: t.u16(),
   }
 );
 
-const spacetimedb = schema({ person, resident, residentProfile });
+const message = table(
+  { name: 'message', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    sender_id: t.u64(),
+    sender_known: t.bool(),
+    recipient_id: t.u32(),
+    text: t.string(),
+    timestamp: t.timestamp(),
+    campaign_id: t.string(),
+  }
+);
+
+const spacetimedb = schema({ person, resident, residentProfile, message, notification });
 export default spacetimedb;
 
-// One flat row per resident: resident fields + profile fields (what residents.json holds).
 const SeedRow = t.object('SeedRow', {
   id: t.u32(),
   persona: t.string(),
@@ -57,17 +73,9 @@ const SeedRow = t.object('SeedRow', {
   open_delay_s: t.u16(),
 });
 
-export const init = spacetimedb.init(_ctx => {
-  // Called when the module is initially published
-});
-
-export const onConnect = spacetimedb.clientConnected(_ctx => {
-  // Called every time a new client connects
-});
-
-export const onDisconnect = spacetimedb.clientDisconnected(_ctx => {
-  // Called every time a client disconnects
-});
+export const init = spacetimedb.init(_ctx => {});
+export const onConnect = spacetimedb.clientConnected(_ctx => {});
+export const onDisconnect = spacetimedb.clientDisconnected(_ctx => {});
 
 export const add = spacetimedb.reducer(
   { name: t.string() },
@@ -83,7 +91,6 @@ export const sayHello = spacetimedb.reducer(ctx => {
   console.info('Hello, World!');
 });
 
-// Insert a batch of residents (called by simulation/seed_spacetime.py, 500 at a time).
 export const seedResidentsBatch = spacetimedb.reducer(
   { rows: t.array(SeedRow) },
   (ctx, { rows }) => {
@@ -111,7 +118,6 @@ export const seedResidentsBatch = spacetimedb.reducer(
   }
 );
 
-// Delete every resident and profile so the city can be reseeded.
 export const clearResidents = spacetimedb.reducer(ctx => {
   let n = 0;
   for (const r of [...ctx.db.resident.iter()]) {
@@ -123,3 +129,48 @@ export const clearResidents = spacetimedb.reducer(ctx => {
   }
   console.info(`cleared ${n} residents`);
 });
+
+export const startCampaign = spacetimedb.reducer(
+  { scam_text: t.string(), num_targets: t.u32() },
+  (ctx, { scam_text, num_targets }) => {
+    const campaign_id = "c1";
+    const unexposed = [...ctx.db.resident.iter()].filter(r => !r.exposed);
+    const targets = unexposed.slice(0, num_targets);
+    for (const r of targets) {
+      ctx.db.message.insert({
+        id: 0n,
+        sender_id: 999n,
+        sender_known: false,
+        recipient_id: r.id,
+        text: scam_text,
+        timestamp: ctx.timestamp,
+        campaign_id,
+      });
+      ctx.db.resident.id.update({ ...r, exposed: true });
+    }
+    console.info(`blasted ${targets.length}`);
+  }
+);
+
+export const flagCampaign = spacetimedb.reducer(
+  {},
+  (ctx) => {
+    for (const r of [...ctx.db.resident.iter()]) {
+      if (r.exposed) {
+        // the 6 who got hit → recovery notif
+        ctx.db.notification.insert({
+          id: 0n, recipient_id: r.id, kind: "recovery",
+          text: "⚠️ You received a scam. Do not click. If you did: freeze your card, change passwords, report to your carrier.",
+        });
+      } else if (!r.warned) {
+        // everyone else → preemptive alert + mark warned
+        ctx.db.notification.insert({
+          id: 0n, recipient_id: r.id, kind: "alert",
+          text: "🛡️ Scam Shield: A phishing campaign is active. Don't click links asking for delivery fees.",
+        });
+        ctx.db.resident.id.update({ ...r, warned: true });
+      }
+    }
+    console.info(`notifications dispatched`);
+  }
+);
