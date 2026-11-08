@@ -99,13 +99,42 @@ export interface LiveIncident {
   warningText: string;
   numVariants: number;
   clusterMeta: ClusterMeta[];
+  /** Seconds from the first to the last exposed message when the detector fired. */
+  timeSpreadS: number;
   /** Epoch milliseconds. */
   createdAt: number;
   updatedAt: number;
 }
 
+/** Spacetime `scenario` row: an attack the Simulate button can launch (from simulation/scenarios.json). */
+export interface SimScenario {
+  id: string;
+  label: string;
+  description: string;
+}
+
+/** Spacetime `sim_run` row: one Simulate press, driven by simulation/sim_runner.py. */
+export interface SimRun {
+  id: string;
+  scenarioId: string;
+  status: "requested" | "running" | "done" | "aborted";
+  createdAt: number;
+}
+
+/** Spacetime `pipeline_log` row: one terminal line from the attacker or detector. */
+export interface PipelineLogLine {
+  id: string;
+  source: "attacker" | "detector";
+  line: string;
+  at: number;
+}
+
 /** Live notification + Nemotron feed. Present only in live mode (`VITE_DATA_MODE=live`). */
 export interface LiveFeed {
+  /** Simulate-button scenarios, runs (newest first) and terminal output (oldest first). */
+  scenarios: SimScenario[];
+  latestRun?: SimRun;
+  logs: PipelineLogLine[];
   /** All notification rows, oldest first. */
   notifications: LiveNotification[];
   alertCount: number;
@@ -144,6 +173,8 @@ export interface DataAdapter {
   loadScenario(scenario: Scenario): Promise<void>;
   /** Resets simulation state according to the adapter implementation. */
   reset(): Promise<void>;
+  /** Live only: resets the last run and queues an attack scenario for sim_runner.py. */
+  requestSimulation?(scenarioId: string): Promise<void>;
   /** Optional local-demo controls. Live adapters do not implement them. */
   startMockSimulation?(scenario: Scenario): Promise<void>;
   pauseMockSimulation?(): Promise<void>;

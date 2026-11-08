@@ -5,6 +5,26 @@ from detection.simhash import simhash
 from detection.detector import detect
 from detection.investigator import investigate
 
+def sent_at(r):
+    """Real send time (seconds) from Spacetime's message.timestamp, set by start_campaign.
+    The SQL API returns it as [micros] (or {"__timestamp_micros_since_unix_epoch__": micros})."""
+    ts = r["timestamp"]
+    if isinstance(ts, dict):
+        ts = next(iter(ts.values()))
+    if isinstance(ts, list):
+        ts = ts[0]
+    return int(ts) / 1_000_000
+
+
+def log(line=""):
+    """Prints like before, and streams the line to the frontend terminal (pipeline_log table)."""
+    print(line)
+    try:
+        call_reducer("log_line", ["detector", line.strip("\n")])
+    except Exception:
+        pass  # module without log_line: terminal output still works
+
+
 def report_incident(campaign_id, status, result, verdict=None):
     """Writes Nemotron's progress/verdict to the Spacetime `incident` table (the frontend reads it live)."""
     verdict = verdict or {}
@@ -17,10 +37,11 @@ def report_incident(campaign_id, status, result, verdict=None):
         str(verdict.get("warning_text", "")),
         int(verdict.get("num_variants", result.get("num_clusters", 0)) or 0),
         json.dumps(result.get("cluster_meta", [])),
+        float(result.get("time_spread_s", 0) or 0),
     ])
 
 
-print("Monitoring Avon for scam campaigns...")
+log("Monitoring Avon for scam campaigns...")
 flagged_campaigns = set()
 
 while True:
@@ -31,7 +52,7 @@ while True:
         "recipient_id": r["recipient_id"],
         "text": r["text"].strip('"'),
         "simhash": simhash(r["text"].strip('"')),
-        "timestamp": time.time(),
+        "timestamp": sent_at(r),
     } for r in rows]
 
     if messages:
@@ -40,22 +61,23 @@ while True:
             campaign_id = rows[0]["campaign_id"].strip('"')
             if campaign_id not in flagged_campaigns:
                 flagged_campaigns.add(campaign_id)
-                print(f"\n🚨 CAMPAIGN DETECTED")
-                print(f"   {len(result['infected'])} exposed, {result['protected_count']} protected")
-                print(f"   {result['num_clusters']} fingerprint clusters (rephrasing variants)")
+                log(f"\n🚨 CAMPAIGN DETECTED ({campaign_id})")
+                log(f"   {len(result['infected'])} exposed, {result['protected_count']} protected, first to last exposed message: {result['time_spread_s']}s")
+                log(f"   {result['num_clusters']} fingerprint clusters (rephrasing variants)")
                 call_reducer("flag_campaign", [])
-                print("   ✅ Residents protected")
-                print("   🔍 Analyzing behavioral signatures...")
+                log("   ✅ Residents protected")
+                log("   🔍 Analyzing behavioral signatures...")
                 report_incident(campaign_id, "investigating", result)
                 try:
-                    verdict = investigate(result["cluster_meta"], result["velocity"], result["recipient_count"])
+                    verdict = investigate(result["cluster_meta"], result["velocity"], result["recipient_count"],
+                                          result["time_spread_s"])
                 except Exception as e:  # Nemotron down: keep running, tell the frontend
                     report_incident(campaign_id, "failed", result, {"reasoning": f"Nemotron unavailable: {e}"})
-                    print(f"   ⚠️ Nemotron failed: {e}")
+                    log(f"   ⚠️ Nemotron failed: {e}")
                     continue
                 report_incident(campaign_id, "complete", result, verdict)
-                print(f"\n   ── INCIDENT REPORT ──")
-                print(f"   Coordinated attack: {verdict['is_coordinated_attack']} ({verdict['confidence']}%)")
-                print(f"   Variants: {verdict['num_variants']}")
-                print(f"   Reasoning: {verdict['reasoning']}")
+                log(f"\n   ── INCIDENT REPORT ──")
+                log(f"   Coordinated attack: {verdict['is_coordinated_attack']} ({verdict['confidence']}%)")
+                log(f"   Variants: {verdict['num_variants']}")
+                log(f"   Reasoning: {verdict['reasoning']}")
     time.sleep(0.3)

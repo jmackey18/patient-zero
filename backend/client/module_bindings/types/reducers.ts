@@ -6,21 +6,31 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AddReducer from "../add_reducer";
-import ClearIncidentsReducer from "../clear_incidents_reducer";
-import ClearResidentsReducer from "../clear_residents_reducer";
-import FlagCampaignReducer from "../flag_campaign_reducer";
-import ReportIncidentReducer from "../report_incident_reducer";
-import SayHelloReducer from "../say_hello_reducer";
-import SeedResidentsBatchReducer from "../seed_residents_batch_reducer";
-import StartCampaignReducer from "../start_campaign_reducer";
+import AddReducer from "../add_reducer.ts";
+import ClearIncidentsReducer from "../clear_incidents_reducer.ts";
+import ClearResidentsReducer from "../clear_residents_reducer.ts";
+import FlagCampaignReducer from "../flag_campaign_reducer.ts";
+import LogLineReducer from "../log_line_reducer.ts";
+import RegisterScenarioReducer from "../register_scenario_reducer.ts";
+import ReportIncidentReducer from "../report_incident_reducer.ts";
+import RequestResetReducer from "../request_reset_reducer.ts";
+import RequestSimulationReducer from "../request_simulation_reducer.ts";
+import SayHelloReducer from "../say_hello_reducer.ts";
+import SeedResidentsBatchReducer from "../seed_residents_batch_reducer.ts";
+import StartCampaignReducer from "../start_campaign_reducer.ts";
+import UpdateSimRunReducer from "../update_sim_run_reducer.ts";
 
 export type AddParams = __Infer<typeof AddReducer>;
 export type ClearIncidentsParams = __Infer<typeof ClearIncidentsReducer>;
 export type ClearResidentsParams = __Infer<typeof ClearResidentsReducer>;
 export type FlagCampaignParams = __Infer<typeof FlagCampaignReducer>;
+export type LogLineParams = __Infer<typeof LogLineReducer>;
+export type RegisterScenarioParams = __Infer<typeof RegisterScenarioReducer>;
 export type ReportIncidentParams = __Infer<typeof ReportIncidentReducer>;
+export type RequestResetParams = __Infer<typeof RequestResetReducer>;
+export type RequestSimulationParams = __Infer<typeof RequestSimulationReducer>;
 export type SayHelloParams = __Infer<typeof SayHelloReducer>;
 export type SeedResidentsBatchParams = __Infer<typeof SeedResidentsBatchReducer>;
 export type StartCampaignParams = __Infer<typeof StartCampaignReducer>;
+export type UpdateSimRunParams = __Infer<typeof UpdateSimRunReducer>;
 

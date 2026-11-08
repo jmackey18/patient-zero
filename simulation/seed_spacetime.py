@@ -41,23 +41,30 @@ def main():
     p.add_argument("--file", default=str(ROOT / "simulation" / "data" / "residents.json"))
     args = p.parse_args()
 
-    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))
-    base = f"{args.host.rstrip('/')}/v1/database/{args.db}"
-    print(f"seeding {len(rows)} residents into {args.db} at {args.host}")
+    seed(args.host, args.db, args.batch, args.file)
+
+
+def seed(host="http://127.0.0.1:3000", db="patient-zero-db", batch=500,
+         file=str(ROOT / "simulation" / "data" / "residents.json"), log=print):
+    """clear_residents, then seed_residents_batch in batches, then verify the counts.
+    Also used by simulation/sim_runner.py for the frontend's Reset button."""
+    rows = json.loads(Path(file).read_text(encoding="utf-8"))
+    base = f"{host.rstrip('/')}/v1/database/{db}"
+    log(f"seeding {len(rows)} residents into {db} at {host}")
 
     post(f"{base}/call/clear_residents", [])
-    print("cleared existing residents")
+    log("cleared existing residents")
 
-    for i in range(0, len(rows), args.batch):
-        chunk = rows[i:i + args.batch]
+    for i in range(0, len(rows), batch):
+        chunk = rows[i:i + batch]
         post(f"{base}/call/seed_residents_batch", [chunk])
-        print(f"  batch {i // args.batch + 1}: residents {chunk[0]['id']}-{chunk[-1]['id']}")
+        log(f"  batch {i // batch + 1}: residents {chunk[0]['id']}-{chunk[-1]['id']}")
 
     n_res, n_prof = count(base, "resident"), count(base, "resident_profile")
-    print(f"resident rows: {n_res}, resident_profile rows: {n_prof}")
+    log(f"resident rows: {n_res}, resident_profile rows: {n_prof}")
     if n_res != len(rows) or n_prof != len(rows):
-        sys.exit(f"MISMATCH: expected {len(rows)}")
-    print("OK")
+        raise RuntimeError(f"MISMATCH: expected {len(rows)}")
+    log("OK")
 
 
 if __name__ == "__main__":

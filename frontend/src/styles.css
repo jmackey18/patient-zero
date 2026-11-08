@@ -64,4 +64,7 @@
   .warning-card {
     @apply rounded-xl border border-warning/40 bg-warning/10 p-4;
   }
+  .danger-button {
+    @apply border-danger/50 bg-danger/15 text-danger hover:border-danger;
+  }
 }

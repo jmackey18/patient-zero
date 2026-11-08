@@ -135,6 +135,19 @@ python3 -m simulation.attacker
 ```
 Watch Terminal 3: detect → protect → Nemotron incident report.
 
+### Simulate button (frontend → full pipeline)
+Run these two next to each other (locally or in tmux on Vultr), then press **Simulate** in Command Center:
+```bash
+python3 -m detection.live_detect     # detector + Nemotron (logs stream to the UI)
+python3 -m simulation.sim_runner     # runs the attacker when Simulate is pressed
+```
+- Scenarios live in `simulation/scenarios.json` (scam text + attack shape: `wave_size`, `waves`, `interval_s`).
+  Gemini variants are cached in `simulation/variants.json`, keyed by scenario id.
+- Each press calls `request_simulation`, which resets the last run (messages, notifications, incidents,
+  logs, resident flags) and queues a `sim_run`. Its id becomes the campaign id (`run-<id>`), so every run is flagged.
+- The terminal window reads `pipeline_log`; the Nemotron card reads `incident`. Nothing in the UI is hardcoded.
+- `python3 -m simulation.attacker toll` still runs one scenario from the CLI (no argument = package fee).
+
 ## HOW TO RUN ON VULTR
 
 The shared instance is at `https://db.149-28-246-156.sslip.io` (db name: `patient-zero-db`).

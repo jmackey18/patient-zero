@@ -34,24 +34,32 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AddReducer from "./add_reducer";
-import ClearIncidentsReducer from "./clear_incidents_reducer";
-import ClearResidentsReducer from "./clear_residents_reducer";
-import FlagCampaignReducer from "./flag_campaign_reducer";
-import ReportIncidentReducer from "./report_incident_reducer";
-import SayHelloReducer from "./say_hello_reducer";
-import SeedResidentsBatchReducer from "./seed_residents_batch_reducer";
-import StartCampaignReducer from "./start_campaign_reducer";
+import AddReducer from "./add_reducer.ts";
+import ClearIncidentsReducer from "./clear_incidents_reducer.ts";
+import ClearResidentsReducer from "./clear_residents_reducer.ts";
+import FlagCampaignReducer from "./flag_campaign_reducer.ts";
+import LogLineReducer from "./log_line_reducer.ts";
+import RegisterScenarioReducer from "./register_scenario_reducer.ts";
+import ReportIncidentReducer from "./report_incident_reducer.ts";
+import RequestResetReducer from "./request_reset_reducer.ts";
+import RequestSimulationReducer from "./request_simulation_reducer.ts";
+import SayHelloReducer from "./say_hello_reducer.ts";
+import SeedResidentsBatchReducer from "./seed_residents_batch_reducer.ts";
+import StartCampaignReducer from "./start_campaign_reducer.ts";
+import UpdateSimRunReducer from "./update_sim_run_reducer.ts";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
-import IncidentRow from "./incident_table";
-import MessageRow from "./message_table";
-import NotificationRow from "./notification_table";
-import PersonRow from "./person_table";
-import ResidentRow from "./resident_table";
-import ResidentProfileRow from "./resident_profile_table";
+import IncidentRow from "./incident_table.ts";
+import MessageRow from "./message_table.ts";
+import NotificationRow from "./notification_table.ts";
+import PersonRow from "./person_table.ts";
+import PipelineLogRow from "./pipeline_log_table.ts";
+import ResidentRow from "./resident_table.ts";
+import ResidentProfileRow from "./resident_profile_table.ts";
+import ScenarioRow from "./scenario_table.ts";
+import SimRunRow from "./sim_run_table.ts";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -97,6 +105,17 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, PersonRow),
+  pipelineLog: __table({
+    name: 'pipeline_log',
+    indexes: [
+      { accessor: 'id', name: 'pipeline_log_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'pipeline_log_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PipelineLogRow),
   resident: __table({
     name: 'resident',
     indexes: [
@@ -119,6 +138,28 @@ const tablesSchema = __schema({
       { name: 'resident_profile_resident_id_key', constraint: 'unique', columns: ['residentId'] },
     ],
   }, ResidentProfileRow),
+  scenario: __table({
+    name: 'scenario',
+    indexes: [
+      { accessor: 'id', name: 'scenario_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'scenario_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ScenarioRow),
+  simRun: __table({
+    name: 'sim_run',
+    indexes: [
+      { accessor: 'id', name: 'sim_run_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'sim_run_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, SimRunRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -127,10 +168,15 @@ const reducersSchema = __reducers(
   __reducerSchema("clear_incidents", ClearIncidentsReducer),
   __reducerSchema("clear_residents", ClearResidentsReducer),
   __reducerSchema("flag_campaign", FlagCampaignReducer),
+  __reducerSchema("log_line", LogLineReducer),
+  __reducerSchema("register_scenario", RegisterScenarioReducer),
   __reducerSchema("report_incident", ReportIncidentReducer),
+  __reducerSchema("request_reset", RequestResetReducer),
+  __reducerSchema("request_simulation", RequestSimulationReducer),
   __reducerSchema("say_hello", SayHelloReducer),
   __reducerSchema("seed_residents_batch", SeedResidentsBatchReducer),
   __reducerSchema("start_campaign", StartCampaignReducer),
+  __reducerSchema("update_sim_run", UpdateSimRunReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

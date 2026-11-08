@@ -1,4 +1,5 @@
 import { MockSimulationControls } from "./components/MockSimulationControls";
+import { SimulatePanel } from "./components/live/SimulatePanel";
 import { CommandCenter } from "./views/CommandCenter";
 import { useState, useSyncExternalStore } from "react";
 import { dataAdapter } from "./data";
@@ -85,9 +86,10 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
         {adapter.mode === "live" && (
           <aside className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted">
             Resident states, notifications, and Nemotron investigation reports
-            stream from SpacetimeDB. Message contents are not subscribed.
-            Scenario loading, reset, and warning acknowledgment are not
-            available in live mode yet.
+            stream from SpacetimeDB. Message contents are not subscribed. Use
+            Simulate to launch a synthetic attack through the live pipeline or
+            reset the simulation. Warning acknowledgment is not available in
+            live mode yet.
           </aside>
         )}
         {(data.connection?.state === "error" ||
@@ -144,6 +146,13 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
                 "Timed mock simulation reset; residents retained.",
               )
             }
+          />
+        )}
+        {adapter.mode === "live" && adapter.requestSimulation && (
+          <SimulatePanel
+            data={data}
+            onSimulate={(id) => adapter.requestSimulation!(id)}
+            onReset={() => adapter.reset()}
           />
         )}
         <CommandCenter

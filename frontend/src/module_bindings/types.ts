@@ -49,6 +49,14 @@ export const Person = __t.object("Person", {
 });
 export type Person = __Infer<typeof Person>;
 
+export const PipelineLog = __t.object("PipelineLog", {
+  id: __t.u64(),
+  source: __t.string(),
+  line: __t.string(),
+  at: __t.timestamp(),
+});
+export type PipelineLog = __Infer<typeof PipelineLog>;
+
 export const Resident = __t.object("Resident", {
   id: __t.u32(),
   persona: __t.string(),
@@ -71,6 +79,13 @@ export const ResidentProfile = __t.object("ResidentProfile", {
 });
 export type ResidentProfile = __Infer<typeof ResidentProfile>;
 
+export const Scenario = __t.object("Scenario", {
+  id: __t.string(),
+  label: __t.string(),
+  description: __t.string(),
+});
+export type Scenario = __Infer<typeof Scenario>;
+
 export const SeedRow = __t.object("SeedRow", {
   id: __t.u32(),
   persona: __t.string(),
@@ -87,4 +102,13 @@ export const SeedRow = __t.object("SeedRow", {
   openDelayS: __t.u16(),
 });
 export type SeedRow = __Infer<typeof SeedRow>;
+
+export const SimRun = __t.object("SimRun", {
+  id: __t.u64(),
+  scenarioId: __t.string(),
+  status: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type SimRun = __Infer<typeof SimRun>;
 

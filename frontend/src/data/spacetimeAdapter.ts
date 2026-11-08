@@ -6,7 +6,9 @@ import type {
   LiveFeed,
   LiveIncident,
   LiveNotification,
+  PipelineLogLine,
   Resident,
+  SimRun,
   Snapshot,
 } from "./contracts";
 
@@ -22,6 +24,9 @@ const QUERIES = [
   "SELECT * FROM resident_profile",
   "SELECT * FROM notification",
   "SELECT * FROM incident",
+  "SELECT * FROM scenario",
+  "SELECT * FROM sim_run",
+  "SELECT * FROM pipeline_log",
 ];
 
 /** Spacetime Timestamp -> epoch milliseconds. */
@@ -76,7 +81,17 @@ export function createSpacetimeAdapter({
     },
     acknowledgeWarning: () => Promise.reject(new Error(NOT_AVAILABLE)),
     loadScenario: () => Promise.reject(new Error(NOT_AVAILABLE)),
-    reset: () => Promise.reject(new Error(NOT_AVAILABLE)),
+    /** Reset button: clears the last run and reseeds the 5000 residents (via sim_runner.py). */
+    reset() {
+      if (!conn)
+        return Promise.reject(new Error("Not connected to SpacetimeDB."));
+      return conn.reducers.requestReset({});
+    },
+    requestSimulation(scenarioId) {
+      if (!conn)
+        return Promise.reject(new Error("Not connected to SpacetimeDB."));
+      return conn.reducers.requestSimulation({ scenarioId });
+    },
   };
 
   if (!uri) {
@@ -144,11 +159,36 @@ export function createSpacetimeAdapter({
         warningText: i.warningText,
         numVariants: i.numVariants,
         clusterMeta: parseClusterMeta(i.clusterMeta),
+        timeSpreadS: i.timeSpreadS,
         createdAt: toMs(i.createdAt),
         updatedAt: toMs(i.updatedAt),
       }))
       .sort((a, b) => b.createdAt - a.createdAt);
+    const scenarios = [...c.db.scenario.iter()]
+      .map((s) => ({ id: s.id, label: s.label, description: s.description }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    let latestRun: SimRun | undefined;
+    for (const r of c.db.simRun.iter()) {
+      if (!latestRun || Number(r.id) > Number(latestRun.id))
+        latestRun = {
+          id: String(r.id),
+          scenarioId: r.scenarioId,
+          status: r.status as SimRun["status"],
+          createdAt: toMs(r.createdAt),
+        };
+    }
+    const logs: PipelineLogLine[] = [...c.db.pipelineLog.iter()]
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((l) => ({
+        id: String(l.id),
+        source: l.source === "attacker" ? "attacker" : "detector",
+        line: l.line,
+        at: toMs(l.at),
+      }));
     return {
+      scenarios,
+      latestRun,
+      logs,
       notifications,
       alertCount,
       recoveryCount,
@@ -162,12 +202,19 @@ export function createSpacetimeAdapter({
     if (!applied || frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (conn)
-        publish({
-          ...snapshot,
-          residents: buildResidents(conn),
-          liveFeed: buildFeed(conn),
-        });
+      if (!conn) return;
+      const liveFeed = buildFeed(conn);
+      // While Reset is reseeding (10k row deletes/inserts in batches), keep the previous residents so
+      // the map doesn't rebuild per batch; the sim_run "done" update triggers one full rebuild.
+      const run = liveFeed.latestRun;
+      const reseeding =
+        run?.scenarioId === "reset" &&
+        (run.status === "requested" || run.status === "running");
+      publish({
+        ...snapshot,
+        residents: reseeding ? snapshot.residents : buildResidents(conn),
+        liveFeed,
+      });
     });
   }
 
@@ -207,6 +254,12 @@ export function createSpacetimeAdapter({
     c.db.incident.onInsert(scheduleRebuild);
     c.db.incident.onUpdate(scheduleRebuild);
     c.db.incident.onDelete(scheduleRebuild);
+    c.db.scenario.onInsert(scheduleRebuild);
+    c.db.scenario.onUpdate(scheduleRebuild);
+    c.db.simRun.onInsert(scheduleRebuild);
+    c.db.simRun.onUpdate(scheduleRebuild);
+    c.db.pipelineLog.onInsert(scheduleRebuild);
+    c.db.pipelineLog.onDelete(scheduleRebuild);
   }
 
   try {
