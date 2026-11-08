@@ -43,7 +43,7 @@ Press **Simulate** in the Command Center and the whole pipeline runs for real:
 
 ### Three attack styles, three different outcomes
 
-Each scenario is a different attack shape. Nothing in the UI is hardcoded; every number below comes out of the pipeline at run time.
+Each scenario is a different attack shape.
 
 | Scenario | Attack shape | Typical result in our runs |
 |---|---|---|
