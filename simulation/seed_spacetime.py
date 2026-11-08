@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-
+# This function sends a POST request to the specified URL with the given body and content type.
 def post(url, body, content_type="application/json"):
     data = body if isinstance(body, bytes) else json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": content_type})
@@ -27,7 +27,7 @@ def post(url, body, content_type="application/json"):
     except urllib.error.URLError as e:
         sys.exit(f"Can't reach {url}: {e.reason} (is the Spacetime server running?)")
 
-
+# This function counts the number of rows in the specified table by sending a SQL query to the Spacetime API.
 def count(base, table):
     out = json.loads(post(f"{base}/sql", f"SELECT COUNT(*) AS n FROM {table}".encode(), "text/plain"))
     return out[0]["rows"][0][0]

@@ -26,7 +26,7 @@ SCATTER = 0.05                   # std-dev of map position around the district c
 def clamp01(v):
     return max(0.0, min(1.0, v))
 
-
+# This function generates a list of residents based on the provided personas, count, and seed.
 def make_residents(personas, count, seed):
     rng = random.Random(seed)
     archetypes = personas["archetypes"]
@@ -55,7 +55,7 @@ def make_residents(personas, count, seed):
         rows.append(row)
     return rows
 
-#commit
+# This function prints a summary of the generated residents, including counts per persona, district, and weak spot.
 def print_summary(rows):
     print(f"{len(rows)} residents")
     for field in ("persona", "district", "weak_spot"):
