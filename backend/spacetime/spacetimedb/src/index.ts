@@ -54,7 +54,28 @@ const message = table(
   }
 );
 
-const spacetimedb = schema({ person, resident, residentProfile, message, notification });
+/**
+ * Nemotron's investigation of a detected campaign, written by detection/live_detect.py.
+ * One row per campaign; the frontend subscribes to show the verdict live.
+ * status: "investigating" (Nemotron running) | "complete" (verdict in) | "failed" (Nemotron unavailable)
+ */
+const incident = table(
+  { name: 'incident', public: true },
+  {
+    campaign_id: t.string().primaryKey(),
+    status: t.string(),
+    is_coordinated: t.bool(),
+    confidence: t.u8(),           // 0-100
+    reasoning: t.string(),
+    warning_text: t.string(),
+    num_variants: t.u32(),        // fingerprint clusters Nemotron linked together
+    cluster_meta: t.string(),     // JSON array of cluster metadata (no message text)
+    created_at: t.timestamp(),
+    updated_at: t.timestamp(),
+  }
+);
+
+const spacetimedb = schema({ person, resident, residentProfile, message, notification, incident });
 export default spacetimedb;
 
 const SeedRow = t.object('SeedRow', {
@@ -174,3 +195,34 @@ export const flagCampaign = spacetimedb.reducer(
     console.info(`notifications dispatched`);
   }
 );
+
+/**
+ * Upserts Nemotron's output for a campaign. Call once with status "investigating"
+ * (so the UI can show the investigation starting), then again with "complete" or "failed".
+ */
+export const reportIncident = spacetimedb.reducer(
+  {
+    campaign_id: t.string(),
+    status: t.string(),
+    is_coordinated: t.bool(),
+    confidence: t.u8(),
+    reasoning: t.string(),
+    warning_text: t.string(),
+    num_variants: t.u32(),
+    cluster_meta: t.string(),
+  },
+  (ctx, args) => {
+    const existing = ctx.db.incident.campaign_id.find(args.campaign_id);
+    if (existing) {
+      ctx.db.incident.campaign_id.update({ ...existing, ...args, updated_at: ctx.timestamp });
+    } else {
+      ctx.db.incident.insert({ ...args, created_at: ctx.timestamp, updated_at: ctx.timestamp });
+    }
+    console.info(`incident ${args.campaign_id}: ${args.status} (${args.confidence}%)`);
+  }
+);
+
+/** Clears incidents (for resetting between demo runs). */
+export const clearIncidents = spacetimedb.reducer(ctx => {
+  for (const i of [...ctx.db.incident.iter()]) ctx.db.incident.campaign_id.delete(i.campaign_id);
+});

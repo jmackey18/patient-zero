@@ -68,6 +68,52 @@ export interface MockSimulationState {
   seedResidentId: string;
 }
 
+/** Spacetime `notification` row, written by flag_campaign. */
+export interface LiveNotification {
+  id: string;
+  recipientId: string;
+  /** "alert" = warned before opening; "recovery" = already hit, show recovery steps. */
+  kind: "alert" | "recovery";
+  text: string;
+}
+
+/** Fingerprint-cluster metadata Nemotron reasons over (never message text). */
+export interface ClusterMeta {
+  size: number;
+  distinct_recipients: number;
+  sender_unknown: boolean;
+  time_spread_s: number;
+  fingerprint?: number | string;
+}
+
+/** Spacetime `incident` row: Nemotron's investigation of one campaign, written by live_detect.py. */
+export interface LiveIncident {
+  campaignId: string;
+  status: "investigating" | "complete" | "failed";
+  isCoordinated: boolean;
+  /** 0-100 */
+  confidence: number;
+  reasoning: string;
+  warningText: string;
+  numVariants: number;
+  clusterMeta: ClusterMeta[];
+  /** Epoch milliseconds. */
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Live notification + Nemotron feed. Present only in live mode (`VITE_DATA_MODE=live`). */
+export interface LiveFeed {
+  /** All notification rows, oldest first. */
+  notifications: LiveNotification[];
+  alertCount: number;
+  recoveryCount: number;
+  /** All incidents, newest first. */
+  incidents: LiveIncident[];
+  /** Newest incident, or undefined before the first detection. */
+  latestIncident?: LiveIncident;
+}
+
 export interface Snapshot {
   residents: Resident[];
   campaigns: Campaign[];
@@ -77,6 +123,8 @@ export interface Snapshot {
   /** Present only for the browser-local timed demo; live adapters omit these fields. */
   mockSimulation?: MockSimulationState;
   mockPropagation?: MockPropagationEvent[];
+  /** Live mode only: notification + Nemotron incident feed from SpacetimeDB. */
+  liveFeed?: LiveFeed;
 }
 
 export type Scenario = "suspicious" | "benign";

@@ -7,12 +7,20 @@ import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
 import AddReducer from "../add_reducer";
+import ClearIncidentsReducer from "../clear_incidents_reducer";
 import ClearResidentsReducer from "../clear_residents_reducer";
+import FlagCampaignReducer from "../flag_campaign_reducer";
+import ReportIncidentReducer from "../report_incident_reducer";
 import SayHelloReducer from "../say_hello_reducer";
 import SeedResidentsBatchReducer from "../seed_residents_batch_reducer";
+import StartCampaignReducer from "../start_campaign_reducer";
 
 export type AddParams = __Infer<typeof AddReducer>;
+export type ClearIncidentsParams = __Infer<typeof ClearIncidentsReducer>;
 export type ClearResidentsParams = __Infer<typeof ClearResidentsReducer>;
+export type FlagCampaignParams = __Infer<typeof FlagCampaignReducer>;
+export type ReportIncidentParams = __Infer<typeof ReportIncidentReducer>;
 export type SayHelloParams = __Infer<typeof SayHelloReducer>;
 export type SeedResidentsBatchParams = __Infer<typeof SeedResidentsBatchReducer>;
+export type StartCampaignParams = __Infer<typeof StartCampaignReducer>;
 

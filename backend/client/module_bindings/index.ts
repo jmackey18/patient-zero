@@ -34,22 +34,62 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import AddReducer from "./add_reducer.ts";
-import ClearResidentsReducer from "./clear_residents_reducer.ts";
-import SayHelloReducer from "./say_hello_reducer.ts";
-import SeedResidentsBatchReducer from "./seed_residents_batch_reducer.ts";
+import AddReducer from "./add_reducer";
+import ClearIncidentsReducer from "./clear_incidents_reducer";
+import ClearResidentsReducer from "./clear_residents_reducer";
+import FlagCampaignReducer from "./flag_campaign_reducer";
+import ReportIncidentReducer from "./report_incident_reducer";
+import SayHelloReducer from "./say_hello_reducer";
+import SeedResidentsBatchReducer from "./seed_residents_batch_reducer";
+import StartCampaignReducer from "./start_campaign_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
-import PersonRow from "./person_table.ts";
-import ResidentRow from "./resident_table.ts";
-import ResidentProfileRow from "./resident_profile_table.ts";
+import IncidentRow from "./incident_table";
+import MessageRow from "./message_table";
+import NotificationRow from "./notification_table";
+import PersonRow from "./person_table";
+import ResidentRow from "./resident_table";
+import ResidentProfileRow from "./resident_profile_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  incident: __table({
+    name: 'incident',
+    indexes: [
+      { accessor: 'campaign_id', name: 'incident_campaign_id_idx_btree', algorithm: 'btree', columns: [
+        'campaignId',
+      ] },
+    ],
+    constraints: [
+      { name: 'incident_campaign_id_key', constraint: 'unique', columns: ['campaignId'] },
+    ],
+  }, IncidentRow),
+  message: __table({
+    name: 'message',
+    indexes: [
+      { accessor: 'id', name: 'message_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'message_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, MessageRow),
+  notification: __table({
+    name: 'notification',
+    indexes: [
+      { accessor: 'id', name: 'notification_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'notification_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, NotificationRow),
   person: __table({
     name: 'person',
     indexes: [
@@ -84,9 +124,13 @@ const tablesSchema = __schema({
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("add", AddReducer),
+  __reducerSchema("clear_incidents", ClearIncidentsReducer),
   __reducerSchema("clear_residents", ClearResidentsReducer),
+  __reducerSchema("flag_campaign", FlagCampaignReducer),
+  __reducerSchema("report_incident", ReportIncidentReducer),
   __reducerSchema("say_hello", SayHelloReducer),
   __reducerSchema("seed_residents_batch", SeedResidentsBatchReducer),
+  __reducerSchema("start_campaign", StartCampaignReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

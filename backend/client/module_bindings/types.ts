@@ -10,6 +10,39 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const Incident = __t.object("Incident", {
+  campaignId: __t.string(),
+  status: __t.string(),
+  isCoordinated: __t.bool(),
+  confidence: __t.u8(),
+  reasoning: __t.string(),
+  warningText: __t.string(),
+  numVariants: __t.u32(),
+  clusterMeta: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type Incident = __Infer<typeof Incident>;
+
+export const Message = __t.object("Message", {
+  id: __t.u64(),
+  senderId: __t.u64(),
+  senderKnown: __t.bool(),
+  recipientId: __t.u32(),
+  text: __t.string(),
+  timestamp: __t.timestamp(),
+  campaignId: __t.string(),
+});
+export type Message = __Infer<typeof Message>;
+
+export const Notification = __t.object("Notification", {
+  id: __t.u64(),
+  recipientId: __t.u32(),
+  kind: __t.string(),
+  text: __t.string(),
+});
+export type Notification = __Infer<typeof Notification>;
+
 export const Person = __t.object("Person", {
   name: __t.string(),
 });

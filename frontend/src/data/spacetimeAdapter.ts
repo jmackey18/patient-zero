@@ -1,7 +1,11 @@
 import { DbConnection } from '../module_bindings';
 import type {
+  ClusterMeta,
   ConnectionStatus,
   DataAdapter,
+  LiveFeed,
+  LiveIncident,
+  LiveNotification,
   Resident,
   Snapshot,
 } from './contracts';
@@ -12,8 +16,34 @@ const NO_MESSAGES: Snapshot['messages'] = [];
 const NO_WARNINGS: Snapshot['warnings'] = [];
 const NOT_AVAILABLE = 'Not available yet in live mode.';
 
-// Only synthetic resident tables: no message text, campaign labels or ground truth.
-const QUERIES = ['SELECT * FROM resident', 'SELECT * FROM resident_profile'];
+// Residents + the notification/incident feed. The `message` table (scam text) is not subscribed.
+const QUERIES = [
+  'SELECT * FROM resident',
+  'SELECT * FROM resident_profile',
+  'SELECT * FROM notification',
+  'SELECT * FROM incident',
+];
+
+const EMPTY_FEED: LiveFeed = {
+  notifications: [],
+  alertCount: 0,
+  recoveryCount: 0,
+  incidents: [],
+};
+
+/** Spacetime Timestamp -> epoch milliseconds. */
+function toMs(ts: { microsSinceUnixEpoch: bigint }) {
+  return Number(ts.microsSinceUnixEpoch / 1000n);
+}
+
+function parseClusterMeta(json: string): ClusterMeta[] {
+  try {
+    const value = JSON.parse(json);
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
 
 export interface SpacetimeAdapterOptions {
   uri?: string;
@@ -32,6 +62,7 @@ export function createSpacetimeAdapter({
     messages: NO_MESSAGES,
     warnings: NO_WARNINGS,
     connection: { state: 'connecting' },
+    liveFeed: EMPTY_FEED,
   };
 
   /** Replaces the cached snapshot, then notifies subscribers (same pattern as the mock). */
@@ -91,12 +122,59 @@ export function createSpacetimeAdapter({
     return residents;
   }
 
+  /** Builds the notification + Nemotron incident feed from the client cache. */
+  function buildFeed(c: DbConnection): LiveFeed {
+    const notifications: LiveNotification[] = [];
+    let alertCount = 0;
+    let recoveryCount = 0;
+    const rows = [...c.db.notification.iter()].sort((a, b) =>
+      a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+    );
+    for (const n of rows) {
+      const kind = n.kind === 'recovery' ? 'recovery' : 'alert';
+      if (kind === 'recovery') recoveryCount++;
+      else alertCount++;
+      notifications.push({
+        id: String(n.id),
+        recipientId: String(n.recipientId),
+        kind,
+        text: n.text,
+      });
+    }
+    const incidents: LiveIncident[] = [...c.db.incident.iter()]
+      .map((i) => ({
+        campaignId: i.campaignId,
+        status: i.status as LiveIncident['status'],
+        isCoordinated: i.isCoordinated,
+        confidence: i.confidence,
+        reasoning: i.reasoning,
+        warningText: i.warningText,
+        numVariants: i.numVariants,
+        clusterMeta: parseClusterMeta(i.clusterMeta),
+        createdAt: toMs(i.createdAt),
+        updatedAt: toMs(i.updatedAt),
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return {
+      notifications,
+      alertCount,
+      recoveryCount,
+      incidents,
+      latestIncident: incidents[0],
+    };
+  }
+
   /** Rebuilds once per animation frame no matter how many rows changed (e.g. a reseed). */
   function scheduleRebuild() {
     if (!applied || frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (conn) publish({ ...snapshot, residents: buildResidents(conn) });
+      if (conn)
+        publish({
+          ...snapshot,
+          residents: buildResidents(conn),
+          liveFeed: buildFeed(conn),
+        });
     });
   }
 
@@ -109,6 +187,7 @@ export function createSpacetimeAdapter({
         publish({
           ...snapshot,
           residents: buildResidents(c),
+          liveFeed: buildFeed(c),
           connection: { state: 'live' },
         });
       })
@@ -129,6 +208,11 @@ export function createSpacetimeAdapter({
     c.db.residentProfile.onInsert(scheduleRebuild);
     c.db.residentProfile.onUpdate(scheduleRebuild);
     c.db.residentProfile.onDelete(scheduleRebuild);
+    c.db.notification.onInsert(scheduleRebuild);
+    c.db.notification.onDelete(scheduleRebuild);
+    c.db.incident.onInsert(scheduleRebuild);
+    c.db.incident.onUpdate(scheduleRebuild);
+    c.db.incident.onDelete(scheduleRebuild);
   }
 
   try {
