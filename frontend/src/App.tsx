@@ -1,3 +1,4 @@
+import { MockSimulationControls } from "./components/MockSimulationControls";
 import { CommandCenter } from "./views/CommandCenter";
 import { ResidentPhone } from "./views/ResidentPhone";
 import { AttackerConsole } from "./views/AttackerConsole";
@@ -99,9 +100,10 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
         {adapter.mode === "mock" && (
           <aside className="rounded-lg border border-warning/25 bg-warning/5 px-4 py-3 text-xs leading-relaxed text-muted">
             <strong className="text-warning">Local demo.</strong> Residents,
-            messages, detection flags, and warnings are fixtures. No detector,
-            SpacetimeDB connection, or Nemotron is running. Changes reset on
-            reload and do not sync across browsers.
+            messages, detection flags, and warnings are scripted fixtures. Timed
+            propagation runs only in this browser. No detector, SpacetimeDB
+            connection, or Nemotron is running. Changes reset on reload and do
+            not sync across browsers.
           </aside>
         )}
         {adapter.mode === "live" && (
@@ -134,7 +136,51 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
           {notice}
         </p>
 
-        {view === "Command Center" && <CommandCenter data={data} />}
+        {adapter.mode === "mock" &&
+          adapter.startMockSimulation &&
+          view !== "Resident Phone" && (
+            <MockSimulationControls
+              data={data}
+              scenario={scenario}
+              setScenario={setScenario}
+              busy={busy}
+              onStart={() =>
+                void perform(async () => {
+                  await adapter.startMockSimulation!(scenario);
+                  setView("Command Center");
+                }, "Timed mock simulation started.")
+              }
+              onPause={() =>
+                void perform(
+                  () => adapter.pauseMockSimulation!(),
+                  "Mock simulation paused.",
+                )
+              }
+              onResume={() =>
+                void perform(
+                  () => adapter.resumeMockSimulation!(),
+                  "Mock simulation resumed.",
+                )
+              }
+              onReset={() =>
+                void perform(
+                  () => adapter.reset(),
+                  "Timed mock simulation reset; residents retained.",
+                )
+              }
+            />
+          )}
+        {view === "Command Center" && (
+          <CommandCenter
+            data={data}
+            selectedId={residentId}
+            onSelect={setResidentId}
+            onOpenPhone={(id) => {
+              setResidentId(id);
+              setView("Resident Phone");
+            }}
+          />
+        )}
         {view === "Resident Phone" && (
           <ResidentPhone
             data={data}
