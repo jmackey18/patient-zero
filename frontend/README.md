@@ -59,3 +59,14 @@ The current `shared/schema.py` differs from the spec: it includes plaintext and 
 `src/App.tsx` owns navigation, adapter subscriptions, and action feedback. The three view components live in `src/views/`; they receive data and callbacks through props. Resident/scenario selections remain in the app so switching views preserves them. Mock records are built in `src/data/mockFixtures.ts`, while `mockAdapter.ts` handles state updates and subscriptions.
 
 Run `npm run format` to format frontend files with Prettier, or `npm run format:check` to check formatting without modifying files.
+
+## Live mode (SpacetimeDB)
+
+`VITE_DATA_MODE=live` swaps the mock for `src/data/spacetimeAdapter.ts`, which subscribes to `resident` and `resident_profile` in `patient-zero-db` and maps them to `Resident` (with optional `profile`: district, x, y, weakSpot for the map). Campaigns, messages and warnings stay empty, and acknowledge/scenario/reset reject with "Not available yet", until those backend tables exist. Connection state and errors appear under the banner.
+
+```sh
+cp .env.example .env.local      # VITE_DATA_MODE=live, Vultr wss URI, patient-zero-db
+npm run dev                     # Command Center should show 5000 residents
+```
+
+Local backend instead: `VITE_SPACETIME_URI=ws://127.0.0.1:3000`. After changing the Spacetime module, regenerate bindings from `backend/spacetime`: `spacetime generate --lang typescript --out-dir ../../frontend/src/module_bindings --module-path ./spacetimedb`. `VITE_*` values ship to the browser: never put API keys in them.

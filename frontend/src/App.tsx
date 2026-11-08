@@ -3,9 +3,31 @@ import { ResidentPhone } from './views/ResidentPhone';
 import { AttackerConsole } from './views/AttackerConsole';
 import { useState, useSyncExternalStore } from 'react';
 import { dataAdapter } from './data';
-import type { DataAdapter, Scenario } from './data/contracts';
+import type {
+  ConnectionStatus,
+  DataAdapter,
+  Scenario,
+} from './data/contracts';
 
 const views = ['Command Center', 'Resident Phone', 'Attacker Console'] as const;
+
+/** Human-readable live connection state for the banner. */
+function connectionLabel(state?: ConnectionStatus['state']) {
+  switch (state) {
+    case 'connecting':
+      return 'Connecting…';
+    case 'syncing':
+      return 'Syncing residents…';
+    case 'live':
+      return 'Live';
+    case 'reconnecting':
+      return 'Reconnecting…';
+    case 'error':
+      return 'Connection error';
+    default:
+      return 'Unknown';
+  }
+}
 type View = (typeof views)[number];
 
 /** Connects adapter updates to the views and preserves selections across navigation. */
@@ -47,8 +69,14 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
         <strong>
           {adapter.mode === 'mock'
             ? 'MOCK DATA — local browser demo'
-            : 'Connected data'}
+            : `LIVE — SpacetimeDB · ${connectionLabel(data.connection?.state)}`}
         </strong>
+        {adapter.mode === 'live' && (
+          <p>
+            Residents stream live from SpacetimeDB. Campaigns, messages, and
+            warnings are not wired to backend tables yet, so they stay empty.
+          </p>
+        )}
         {adapter.mode === 'mock' && (
           <p>
             All residents, campaign flags, messages, and warnings are fixtures.
@@ -69,6 +97,13 @@ export function App({ adapter = dataAdapter }: { adapter?: DataAdapter }) {
           </button>
         ))}
       </nav>
+      {(data.connection?.state === 'error' ||
+        data.connection?.state === 'reconnecting') && (
+        <p role="alert" className="rounded border border-red-300 bg-red-50 p-3">
+          {data.connection.message ?? 'Connection problem.'}
+          {data.connection.state === 'reconnecting' && ' Retrying…'}
+        </p>
+      )}
       {error && (
         <p role="alert" className="rounded border border-red-300 bg-red-50 p-3">
           {error}
