@@ -137,7 +137,73 @@ test("investigation states distinguish unavailable, empty, pending, completed, a
   }
 });
 
-test("notifications show only the newest record per type and escape their text", () => {
+/** Check both permanent phone regions and their independently derived sleep/wake states. */
+function assertPhoneStates(html, awake, asleep) {
+  assert.match(html, /aria-label="Preemptive alert phone"/);
+  assert.match(html, /aria-label="Recovery guidance phone"/);
+  assert.equal((html.match(/role="region"/g) ?? []).length, 2);
+  assert.equal((html.match(/data-state="awake"/g) ?? []).length, awake);
+  assert.equal((html.match(/data-state="asleep"/g) ?? []).length, asleep);
+}
+
+test("both notification phones start inactive for empty or unavailable feeds", () => {
+  for (const data of [snapshot(), snapshot({ liveFeed: undefined })]) {
+    const html = render(LiveNotifications, { data });
+    assertPhoneStates(html, 0, 2);
+    assert.equal((html.match(/Awaiting notifications/g) ?? []).length, 2);
+    assert.doesNotMatch(html, /Acknowledge warning/);
+  }
+  assert.match(
+    render(LiveNotifications, { data: snapshot({ liveFeed: undefined }) }),
+    /Notification feed unavailable until the live subscription syncs/,
+  );
+});
+
+test("each notification type wakes only its own phone and renders the recipient name safely", () => {
+  for (const kind of ["alert", "recovery"]) {
+    const html = render(LiveNotifications, {
+      data: snapshot({
+        residents: [{ ...resident, displayName: "Alex <script>name</script>" }],
+        liveFeed: {
+          ...snapshot().liveFeed,
+          notifications: [
+            {
+              id: "1",
+              recipientId: "1",
+              kind,
+              text: "Check the sender before acting.",
+            },
+          ],
+        },
+      }),
+    });
+    assertPhoneStates(html, 1, 1);
+    assert.match(html, /Alex &lt;script&gt;name&lt;\/script&gt;/);
+    assert.match(html, /Check the sender before acting\./);
+    assert.equal((html.match(/Awaiting notifications/g) ?? []).length, 1);
+    assert.doesNotMatch(html, /<script>|Resident 1/);
+  }
+});
+
+test("notification stack counts records rather than unique recipients", () => {
+  const html = render(LiveNotifications, {
+    data: snapshot({
+      liveFeed: {
+        ...snapshot().liveFeed,
+        notifications: [
+          { id: "1", recipientId: "1", kind: "alert", text: "Earlier alert" },
+          { id: "2", recipientId: "1", kind: "alert", text: "Latest alert" },
+        ],
+      },
+    }),
+  });
+  assertPhoneStates(html, 1, 1);
+  assert.match(html.replace(/<[^>]*>/g, ""), /2 notifications/);
+  assert.match(html, /Latest alert/);
+  assert.doesNotMatch(html, /Earlier alert/);
+});
+
+test("notification phones bound large feeds to the newest record per type and escape their text", () => {
   const notifications = Array.from({ length: 5000 }, (_, i) => ({
     id: String(i),
     recipientId: String(i + 1),
@@ -153,13 +219,18 @@ test("notifications show only the newest record per type and escape their text",
     },
   });
   const log = render(LiveNotifications, { data });
-  assert.equal((log.match(/<li /g) ?? []).length, 2);
+  assertPhoneStates(log, 2, 0);
+  assert.match(log.replace(/<[^>]*>/g, ""), /4,999 notifications/);
+  assert.ok(
+    log.length < 20000,
+    "thousands of records must not become thousands of DOM nodes",
+  );
   assert.match(log, /Alert 4998/);
   assert.doesNotMatch(log, /Alert 4997/);
   assert.match(log, /Recovery guidance/);
   assert.match(log, /&lt;script&gt;Recovery guidance&lt;\/script&gt;/);
   assert.match(log, /Resident 5000/);
-  assert.doesNotMatch(log, /<script>|phone|Acknowledge warning/);
+  assert.doesNotMatch(log, /<script>|Acknowledge warning/);
 });
 
 test("command center preserves live and mock records without removed pages", () => {
@@ -227,7 +298,7 @@ test("notification types update independently, including a type older than the l
       data: snapshot({ liveFeed: { ...feed, notifications: rows } }),
     });
   const first = renderLog(notifications);
-  assert.equal((first.match(/<li /g) ?? []).length, 2);
+  assertPhoneStates(first, 2, 0);
   assert.match(first, /Older recovery/);
   assert.match(first, /Alert sequence 149/);
   const updated = renderLog([
@@ -238,11 +309,11 @@ test("notification types update independently, including a type older than the l
   assert.doesNotMatch(updated, /Older recovery/);
   assert.match(updated, /Alert sequence 149/);
   assert.equal(JSON.stringify(notifications), before);
-  assert.equal(
-    (renderLog(notifications.slice(1)).match(/<li /g) ?? []).length,
-    1,
-  );
-  assert.match(renderLog([]), /No notifications reported yet/);
+  assertPhoneStates(renderLog(notifications.slice(1)), 1, 1);
+  const reset = renderLog([]);
+  assertPhoneStates(reset, 0, 2);
+  assert.equal((reset.match(/Awaiting notifications/g) ?? []).length, 2);
+  assert.doesNotMatch(reset, /Older recovery|New recovery|Alert sequence/);
 });
 
 test("phone inspector uses the actual profile name and current status with safe text", () => {
