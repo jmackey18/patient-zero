@@ -1,5 +1,8 @@
 import type { Snapshot } from '../data/contracts';
 
+/** Cards rendered in the resident grid; the count tile always shows the full total. */
+const MAX_CARDS = 200;
+
 /**
  * Derives a display status, prioritizing warning records over flagged messages.
  * A warning record does not imply delivery or protection.
@@ -64,8 +67,13 @@ export function CommandCenter({ data }: { data: Snapshot }) {
           Schematic resident grid; not geographic locations. Warning records do
           not establish delivery or protection.
         </p>
+        {data.residents.length > MAX_CARDS && (
+          <p className="muted mb-2">
+            Showing {MAX_CARDS} of {data.residents.length} residents.
+          </p>
+        )}
         <ul className="grid gap-3 sm:grid-cols-2">
-          {data.residents.map((person) => {
+          {data.residents.slice(0, MAX_CARDS).map((person) => {
             const status = getResidentStatus(person.id, data);
             return (
               <li

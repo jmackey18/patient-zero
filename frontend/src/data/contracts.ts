@@ -4,6 +4,23 @@ export interface Resident {
   persona: string;
   isSimulated: boolean;
   displayName: string;
+  /** Map/profile details; present in live mode (from resident_profile), absent in mock fixtures. */
+  profile?: ResidentProfile;
+}
+
+export interface ResidentProfile {
+  district: string;
+  /** Map position, 0..1. */
+  x: number;
+  y: number;
+  /** Scam type this synthetic resident is most likely to fall for. */
+  weakSpot: string;
+}
+
+/** Live-adapter connection state; absent in mock mode. */
+export interface ConnectionStatus {
+  state: 'connecting' | 'syncing' | 'live' | 'reconnecting' | 'error';
+  message?: string;
 }
 
 export interface Campaign {
@@ -38,6 +55,7 @@ export interface Snapshot {
   campaigns: Campaign[];
   messages: SyntheticMessage[];
   warnings: Warning[];
+  connection?: ConnectionStatus;
 }
 
 export type Scenario = 'suspicious' | 'benign';
