@@ -2,7 +2,7 @@
 
 ### Catch the scam on its 6th message, not its 6,000th, without reading a single text.
 
-**HackUTD 2026 · Zero Day · T-Mobile track** · Live demo: **https://patientzero.fishing**
+**HackUTD 2026 · Zero Day · Tracks: T-Mobile | Spacetime | Nvidia** · Live demo: **https://patientzero.fishing**
 
 ---
 
